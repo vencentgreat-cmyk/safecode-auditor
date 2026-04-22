@@ -1,6 +1,7 @@
 import sys
 import os
 from scanner.secret_sniffer import scan_directory
+from scanner.config_checker import scan_config_directory
 
 def print_banner():
     """Print the tool banner"""
@@ -43,8 +44,12 @@ def main():
 
     print(f"\n🔍 Scanning: {target}\n")
 
-    findings = scan_directory(target)
-    print_findings(findings)
+    # Run both scanners
+    secret_findings = scan_directory(target)
+    config_findings = scan_config_directory(target)
+    all_findings = secret_findings + config_findings
+
+    print_findings(all_findings)
 
 if __name__ == "__main__":
     main()
