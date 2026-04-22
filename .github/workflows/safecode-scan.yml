@@ -1,0 +1,35 @@
+name: SafeCode Auditor Security Scan
+
+# Trigger on every push and pull request
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the code being pushed
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: pip install pytest
+
+      # Step 4: Run automated tests first
+      - name: Run test suite
+        run: pytest tests/ -v
+
+      # Step 5: Run the actual security scan on the repo
+      - name: Run security scan
+        run: python main.py .
