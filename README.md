@@ -33,35 +33,37 @@ SafeCode Auditor catches these issues in seconds.
 
 **Requirements:** Python 3.11+
 
-**Install dependencies:**
+**Option 1: Install as CLI tool (recommended)**
+
+```bash
+git clone https://github.com/vencentgreat-cmyk/safecode-auditor.git
+cd safecode-auditor
+pip install .
+```
+
+Then scan any project from anywhere:
+
+```bash
+safecode ./your_project
+```
+
+**Option 2: Run directly**
 
 ```bash
 pip install pytest
-```
-
-**Run a scan:**
-
-```bash
 python main.py ./your_project
 ```
 
 **Example output:**
-
-```
 ============================================================
-  SafeCode Auditor - Vibe Coding Security Scanner
-============================================================
-
+SafeCode Auditor - Vibe Coding Security Scanner
 🔍 Scanning: ./your_project
-
 🚨 Found 3 potential security issue(s):
-
 [1] Rule    : AWS Access Key
-    File    : ./your_project/config.py
-    Line    : 12
-    Content : AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
-    Fix     : Move to environment variable: AWS_ACCESS_KEY_ID=your_key in .env
-```
+File    : ./your_project/config.py
+Line    : 12
+Content : AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
+Fix     : Move to environment variable: AWS_ACCESS_KEY_ID=your_key in .env
 
 ---
 
@@ -123,17 +125,17 @@ A social media clone — representative of AI-assisted development patterns.
 ---
 
 ## Project Structure
-
-```
 safecode-auditor/
 ├── scanner/
 │   ├── secret_sniffer.py    # Scans source code for hardcoded secrets
 │   ├── config_checker.py    # Scans config files for dangerous settings
 │   └── firebase_analyzer.py # Logic-based Firebase Rules vulnerability engine
+├── safecode_auditor/
+│   └── cli.py               # CLI entry point for pip install
 ├── test_targets/            # Intentionally vulnerable files for testing
 ├── tests/                   # Automated test suite (16/16 passing)
-└── main.py                  # CLI entry point
-```
+├── main.py                  # Direct run entry point
+└── pyproject.toml           # Package configuration
 
 ---
 
@@ -164,6 +166,7 @@ All 16 tests cover real-world vulnerability patterns found in vibe-coded applica
 - [x] Config checker for `.env`, Docker, Firebase
 - [x] Firebase logic vulnerability analyzer
 - [x] GitHub Actions CI/CD integration
+- [x] Installable CLI tool via `pip install`
 - [ ] CORS misconfiguration detection
 - [ ] JWT weak secret detection
 - [ ] HTML report export
