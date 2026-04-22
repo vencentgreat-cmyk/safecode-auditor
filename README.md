@@ -46,6 +46,8 @@ python main.py ./your_project
 ```
 
 **Example output:**
+
+```
 ============================================================
 SafeCode Auditor - Vibe Coding Security Scanner
 🔍 Scanning: ./your_project
@@ -124,6 +126,7 @@ safecode-auditor/
 ├── test_targets/            # Intentionally vulnerable files for testing
 ├── tests/                   # Automated test suite (16/16 passing)
 └── main.py                  # CLI entry point
+```
 
 ---
 
