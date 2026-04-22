@@ -118,6 +118,8 @@ A social media clone — representative of AI-assisted development patterns.
 ---
 
 ## Project Structure
+
+```
 safecode-auditor/
 ├── scanner/
 │   ├── secret_sniffer.py    # Scans source code for hardcoded secrets
