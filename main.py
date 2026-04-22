@@ -12,10 +12,10 @@ def print_banner():
 def print_findings(findings):
     """Print scan results in a formatted way"""
     if not findings:
-        print("\n No issues found! Your code looks clean.")
+        print("\n✅ No issues found! Your code looks clean.")
         return
 
-    print(f"\n Found {len(findings)} potential security issue(s):\n")
+    print(f"\n🚨 Found {len(findings)} potential security issue(s):\n")
     print("-" * 60)
 
     for i, finding in enumerate(findings, start=1):
@@ -23,6 +23,7 @@ def print_findings(findings):
         print(f"    File    : {finding['file']}")
         print(f"    Line    : {finding['line']}")
         print(f"    Content : {finding['content']}")
+        print(f"    Fix     : {finding['fix']}")
         print("-" * 60)
 
 def main():
