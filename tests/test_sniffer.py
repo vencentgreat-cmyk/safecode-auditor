@@ -45,3 +45,8 @@ def test_clean_file_has_no_findings():
     os.remove(clean_path)  # Clean up after test
     
     assert len(findings) == 0, "Clean file should have no findings"
+
+def test_detects_openai_key():
+    findings = scan_file(BAD_CONFIG)
+    rules_found = [f["rule"] for f in findings]
+    assert "OpenAI API Key" in rules_found, "Should detect OpenAI API Key"

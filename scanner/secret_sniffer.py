@@ -3,12 +3,13 @@ import os
 
 # Rule library: each rule is (rule_name, regex_pattern)
 RULES = [
-    ("OpenAI API Key",     r"sk-[a-zA-Z0-9]{20,}"),
+    ("OpenAI API Key",     r"sk-[a-zA-Z0-9-_]{20,}"),
     ("AWS Access Key",     r"AKIA[0-9A-Z]{16}"),
     ("AWS Secret Key",     r"(?i)aws.{0,20}secret.{0,20}['\"][0-9a-zA-Z/+]{40}['\"]"),
     ("GitHub Token",       r"ghp_[a-zA-Z0-9]{36}"),
     ("Hardcoded Password", r"(?i)(password|passwd|pwd)\s*=\s*['\"][^'\"]{4,}['\"]"),
     ("Database URL",       r"(?i)(mongodb|mysql|postgres)://\S+:\S+@"),
+    ("Generic Secret",     r"(?i)(secret|api_key|access_token)\s*=\s*['\"][^'\"]{8,}['\"]"),
 ]
 
 def scan_file(filepath):
