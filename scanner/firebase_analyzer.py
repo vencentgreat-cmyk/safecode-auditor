@@ -109,10 +109,15 @@ class FirebaseRuleAnalyzer:
             condition = m.group(2).strip()
             rules.append({"operations": operations, "condition": condition})
 
+        # Only flag bare allow with write operations, not bare read-only
         bare = re.compile(r'allow\s+([\w,\s]+)\s*;')
         for m in bare.finditer(clean):
+            if ': if' in clean[max(0, m.start()-5):m.end()]:
+                continue
             operations = [op.strip() for op in m.group(1).split(',')]
-            rules.append({"operations": operations, "condition": None})
+            write_ops = {"write", "create", "update", "delete"}
+            if any(op in write_ops for op in operations):
+                rules.append({"operations": operations, "condition": None})
 
         return rules
 
@@ -162,6 +167,10 @@ class FirebaseRuleAnalyzer:
         if "request.auth.uid!=null" in cond_no_spaces:
             return "WeakUidCheck"
 
+        # If condition uses custom function calls, skip pattern matching
+        # to avoid false positives on role-based auth systems
+        has_custom_function = bool(re.search(r'\b(?!request|resource)\w+\s*\(', cond))
+
         has_auth = "request.auth" in cond_no_spaces
         has_owner = any(
             f"request.auth.uid=={w}" in cond_no_spaces or
@@ -173,15 +182,15 @@ class FirebaseRuleAnalyzer:
             for keyword in ["user", "member", "account", "profile", "person"]
         )
 
-        if has_auth and not has_owner and is_user_path:
+        if has_auth and not has_owner and is_user_path and not has_custom_function:
             read_ops = {"read", "get", "list"}
             if any(op in read_ops for op in operations):
                 return "AuthButNoOwner"
 
         write_ops = {"write", "create", "update"}
         if any(op in write_ops for op in operations):
-                if has_auth and not has_owner and "request.resource.data" not in cond_no_spaces:
-                    return "WriteWithoutValidation"
+            if has_auth and not has_owner and not has_custom_function and "request.resource.data" not in cond_no_spaces:
+                return "WriteWithoutValidation"
 
         return None
 

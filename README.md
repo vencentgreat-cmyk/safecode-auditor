@@ -63,6 +63,49 @@ python main.py ./your_project
 
 ## Real-World Testing
 
+Tested against 2 real Firebase projects on GitHub to validate detection accuracy.
+
+---
+
+### Project 1: [mycalls/applimode](https://github.com/mycalls/applimode)
+A real Firebase social app. No security expertise involved in development.
+
+**Results: 12 findings detected**
+
+| Severity | Type | Path | Assessment |
+|---|---|---|---|
+| CRITICAL | OpenAccess | /adminSettings | ✅ True positive — admin config publicly readable |
+| CRITICAL | OpenAccess | /users | ✅ True positive — all user data publicly readable |
+| CRITICAL | OpenAccess | /posts | ✅ True positive — all posts publicly readable |
+| HIGH | WriteWithoutValidation | /userPrompts | ✅ True positive — write lacks data validation |
+
+**Verdict: High-risk project. Multiple critical exposures confirmed.**
+
+---
+
+### Project 2: [thdk/team-timesheets](https://github.com/thdk/team-timesheets)
+A more mature Firebase project with custom role-based auth functions.
+
+**Results: 11 findings detected, 3 confirmed true positives**
+
+| Severity | Type | Path | Assessment |
+|---|---|---|---|
+| CRITICAL | OpenAccess | /reports | ✅ True positive — `allow read, write;` with no condition |
+| CRITICAL | OpenAccess | /division-users | ✅ True positive — `allow create;` with no condition |
+| CRITICAL | OpenAccess | /division-codes | ✅ True positive — `allow write;` with no condition |
+| HIGH | AuthButNoOwner | /users | ⚠️ False positive — custom `isAuthorised()` function handles access |
+| HIGH | WriteWithoutValidation | /favorites | ⚠️ False positive — role-based validation via custom functions |
+
+**Verdict: Tool correctly identifies unconditional access rules. False positives occur when projects use custom auth functions — a known limitation documented below.**
+
+---
+
+### Known Limitations
+
+- **Custom auth functions**: Projects using role-based helpers like `isAuthorised()` or `isPowerUser()` will generate false positives on `AuthButNoOwner` and `WriteWithoutValidation` checks. The analyzer cannot resolve custom function logic.
+- **Scope**: Firebase Analyzer targets Firestore Security Rules. Realtime Database rules use a different format and are not fully supported.
+- **Best suited for**: Vibe-coded apps and beginner Firebase projects where simple `request.auth` patterns are common.
+
 Tested against [mycalls/applimode](https://github.com/mycalls/applimode), a real Firebase social app on GitHub.
 
 **Results: 12 findings detected**
