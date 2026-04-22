@@ -49,14 +49,19 @@ python main.py ./your_project
 
 ```
 ============================================================
-SafeCode Auditor - Vibe Coding Security Scanner
+  SafeCode Auditor - Vibe Coding Security Scanner
+============================================================
+
 🔍 Scanning: ./your_project
+
 🚨 Found 3 potential security issue(s):
+
 [1] Rule    : AWS Access Key
-File    : ./your_project/config.py
-Line    : 12
-Content : AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
-Fix     : Move to environment variable: AWS_ACCESS_KEY_ID=your_key in .env
+    File    : ./your_project/config.py
+    Line    : 12
+    Content : AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
+    Fix     : Move to environment variable: AWS_ACCESS_KEY_ID=your_key in .env
+```
 
 ---
 
