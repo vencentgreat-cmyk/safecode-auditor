@@ -34,11 +34,13 @@ SafeCode Auditor catches these issues in seconds.
 **Requirements:** Python 3.11+
 
 **Install dependencies:**
+
 ```bash
 pip install pytest
 ```
 
 **Run a scan:**
+
 ```bash
 python main.py ./your_project
 ```
@@ -58,11 +60,12 @@ Fix     : Move to environment variable: AWS_ACCESS_KEY_ID=your_key in .env
 
 ## Real-World Testing
 
-To validate accuracy, SafeCode Auditor was tested against 3 real open-source Firebase projects on GitHub, covering different levels of security maturity.
+To validate accuracy, SafeCode Auditor was tested against 3 real open-source Firebase projects on GitHub, covering different levels of security maturity. Project names and specific details have been anonymized to follow responsible disclosure practices.
 
 ---
 
 ### Sample A: Social App (beginner-level security)
+
 A Firebase-based social application with minimal security configuration.
 
 | Severity | Type | Path | Assessment |
@@ -77,6 +80,7 @@ A Firebase-based social application with minimal security configuration.
 ---
 
 ### Sample B: Team Management App (intermediate security)
+
 A more mature project using custom role-based authentication functions.
 
 | Severity | Type | Path | Assessment |
@@ -91,6 +95,7 @@ A more mature project using custom role-based authentication functions.
 ---
 
 ### Sample C: Social Clone App (typical vibe-coded structure)
+
 A social media clone — representative of AI-assisted development patterns.
 
 | Severity | Type | Path | Assessment |
