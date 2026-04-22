@@ -76,3 +76,40 @@ def test_detects_firebase_unrestricted_write():
     findings = scan_config_file(FIREBASE_FILE)
     rules_found = [f["rule"] for f in findings]
     assert "Firebase: Unrestricted write access" in rules_found, "Should detect Firebase open write rule"
+from scanner.firebase_analyzer import FirebaseRuleAnalyzer, scan_firebase_file
+
+# Paths to firebase test samples
+OPEN_ACCESS_RULES = os.path.join(os.path.dirname(__file__), "..", "test_targets", "open_access.rules")
+AUTH_NO_OWNER_RULES = os.path.join(os.path.dirname(__file__), "..", "test_targets", "auth_no_owner.rules")
+WEAK_UID_RULES = os.path.join(os.path.dirname(__file__), "..", "test_targets", "weak_uid.rules")
+
+def test_firebase_detects_open_access():
+    findings = scan_firebase_file(OPEN_ACCESS_RULES)
+    vuln_types = [f["vuln_type"] for f in findings]
+    assert "OpenAccess" in vuln_types, "Should detect OpenAccess in open_access.rules"
+
+def test_firebase_detects_auth_but_no_owner():
+    findings = scan_firebase_file(AUTH_NO_OWNER_RULES)
+    vuln_types = [f["vuln_type"] for f in findings]
+    assert "AuthButNoOwner" in vuln_types, "Should detect AuthButNoOwner pattern"
+
+def test_firebase_detects_weak_uid_check():
+    findings = scan_firebase_file(WEAK_UID_RULES)
+    vuln_types = [f["vuln_type"] for f in findings]
+    assert "WeakUidCheck" in vuln_types, "Should detect WeakUidCheck pattern"
+
+def test_firebase_clean_rules_no_findings():
+    """Well-written rules should pass cleanly"""
+    analyzer = FirebaseRuleAnalyzer()
+    clean_rules = """
+    rules_version = '2';
+    service cloud.firestore {
+      match /databases/{database}/documents {
+        match /users/{userId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+      }
+    }
+    """
+    findings = analyzer.analyze(clean_rules, "clean.rules")
+    assert len(findings) == 0, "Clean rules should have no findings"

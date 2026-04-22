@@ -47,8 +47,6 @@ class FirebaseRuleAnalyzer:
     def __init__(self):
         self.findings = []
 
-    # ── Parsing ────────────────────────────────────────────────────────────────
-
     def parse(self, content):
         """Parse raw rules content into a list of MatchBlock trees"""
         content = re.sub(r'//[^\n]*', '', content)
@@ -80,7 +78,6 @@ class FirebaseRuleAnalyzer:
 
             path = m.group(1)
 
-            # Skip the database-level wrapper block
             if '/databases/' in path and '/documents' in path:
                 block_start = m.end()
                 block_content = self._extract_block(content, block_start)
@@ -112,15 +109,12 @@ class FirebaseRuleAnalyzer:
             condition = m.group(2).strip()
             rules.append({"operations": operations, "condition": condition})
 
-        # Catch bare "allow write;" with no condition
         bare = re.compile(r'allow\s+([\w,\s]+)\s*;')
         for m in bare.finditer(clean):
             operations = [op.strip() for op in m.group(1).split(',')]
             rules.append({"operations": operations, "condition": None})
 
         return rules
-
-    # ── Analysis ───────────────────────────────────────────────────────────────
 
     def analyze(self, content, filepath="firestore.rules"):
         """Main entry point: parse and analyze a rules file"""
@@ -159,17 +153,19 @@ class FirebaseRuleAnalyzer:
             return "OpenAccess"
 
         cond = condition.strip()
-
         if cond == "true":
             return "OpenAccess"
 
-        if "request.auth.uid != null" in cond:
+        # Normalize whitespace to handle inconsistent formatting from vibe coders
+        cond_no_spaces = cond.replace(" ", "").replace("\n", "").replace("\t", "")
+
+        if "request.auth.uid!=null" in cond_no_spaces:
             return "WeakUidCheck"
 
-        has_auth = "request.auth" in cond
+        has_auth = "request.auth" in cond_no_spaces
         has_owner = any(
-            f"request.auth.uid == {w}" in cond or
-            f"{w} == request.auth.uid" in cond
+            f"request.auth.uid=={w}" in cond_no_spaces or
+            f"{w}==request.auth.uid" in cond_no_spaces
             for w in wildcards
         )
         is_user_path = any(
@@ -184,12 +180,10 @@ class FirebaseRuleAnalyzer:
 
         write_ops = {"write", "create", "update"}
         if any(op in write_ops for op in operations):
-            if has_auth and "request.resource.data" not in cond:
-                return "WriteWithoutValidation"
+                if has_auth and not has_owner and "request.resource.data" not in cond_no_spaces:
+                    return "WriteWithoutValidation"
 
         return None
-
-    # ── Fix Generation ─────────────────────────────────────────────────────────
 
     def _generate_fix(self, path, wildcards, vuln_type, operations):
         """Generate recommended fix code based on path context and vuln type"""
