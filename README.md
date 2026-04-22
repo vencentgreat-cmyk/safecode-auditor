@@ -1,4 +1,5 @@
 # SafeCode Auditor 🔍
+![CI](https://github.com/vencentgreat-cmyk/safecode-auditor/actions/workflows/safecode-scan.yml/badge.svg)
 
 > A lightweight security scanner designed for the vibe coding era.
 
