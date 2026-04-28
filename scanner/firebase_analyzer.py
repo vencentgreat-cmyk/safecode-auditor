@@ -1,6 +1,31 @@
 import re
 import os
 
+try:
+    from .expression_parser import (
+        ArrayLiteral,
+        BinaryOp,
+        Call,
+        ExpressionSyntaxError,
+        Identifier,
+        Literal,
+        MemberAccess,
+        UnaryOp,
+        parse_expression,
+    )
+except ImportError:
+    from expression_parser import (
+        ArrayLiteral,
+        BinaryOp,
+        Call,
+        ExpressionSyntaxError,
+        Identifier,
+        Literal,
+        MemberAccess,
+        UnaryOp,
+        parse_expression,
+    )
+
 # ── Vulnerability pattern definitions ──────────────────────────────────────────
 VULN_PATTERNS = {
     "OpenAccess": {
@@ -107,7 +132,11 @@ class FirebaseRuleAnalyzer:
         for m in pattern.finditer(clean):
             operations = [op.strip() for op in m.group(1).split(',')]
             condition = m.group(2).strip()
-            rules.append({"operations": operations, "condition": condition})
+            rules.append({
+                "operations": operations,
+                "condition": condition,
+                "condition_ast": self._parse_condition_ast(condition),
+            })
 
         # Only flag bare allow with write operations, not bare read-only
         bare = re.compile(r'allow\s+([\w,\s]+)\s*;')
@@ -117,9 +146,21 @@ class FirebaseRuleAnalyzer:
             operations = [op.strip() for op in m.group(1).split(',')]
             write_ops = {"write", "create", "update", "delete"}
             if any(op in write_ops for op in operations):
-                rules.append({"operations": operations, "condition": None})
+                rules.append({
+                    "operations": operations,
+                    "condition": None,
+                    "condition_ast": None,
+                })
 
         return rules
+
+    def _parse_condition_ast(self, condition):
+        if not condition:
+            return None
+        try:
+            return parse_expression(condition)
+        except ExpressionSyntaxError:
+            return None
 
     def analyze(self, content, filepath="firestore.rules"):
         """Main entry point: parse and analyze a rules file"""
@@ -134,8 +175,9 @@ class FirebaseRuleAnalyzer:
         for rule in block.rules:
             condition = rule["condition"]
             operations = rule["operations"]
+            condition_ast = rule.get("condition_ast")
 
-            vuln = self._classify_condition(condition, block.wildcards, operations)
+            vuln = self._classify_condition(condition, condition_ast, block.wildcards, operations)
             if vuln:
                 self.findings.append({
                     "file": filepath,
@@ -152,30 +194,57 @@ class FirebaseRuleAnalyzer:
         for child in block.children:
             self._analyze_block(child, filepath)
 
-    def _classify_condition(self, condition, wildcards, operations):
-        """Core logic engine: classify a condition into a vulnerability pattern"""
+    def _classify_condition(self, condition, condition_ast, wildcards, operations):
+        """Classify a rule condition using parsed AST signals when possible."""
         if condition is None:
             return "OpenAccess"
 
+        if isinstance(condition_ast, Literal) and condition_ast.value is True:
+            return "OpenAccess"
+
+        if condition_ast is None:
+            return self._classify_condition_fallback(condition, wildcards, operations)
+
+        has_auth = self._has_auth_check(condition_ast)
+        has_owner = self._has_owner_check(condition_ast, wildcards)
+        has_weak_uid = self._has_weak_uid_check(condition_ast)
+        has_validation = self._contains_reference(condition_ast, ["request", "resource", "data"])
+        has_custom_function = self._has_custom_function_call(condition_ast)
+        is_user_path = any(
+            keyword in " ".join(wildcards).lower()
+            for keyword in ["user", "member", "account", "profile", "person"]
+        )
+
+        if has_weak_uid and not has_owner:
+            return "WeakUidCheck"
+
+        if has_auth and not has_owner and is_user_path and not has_custom_function:
+            read_ops = {"read", "get", "list"}
+            if any(op in read_ops for op in operations):
+                return "AuthButNoOwner"
+
+        write_ops = {"write", "create", "update"}
+        if any(op in write_ops for op in operations):
+            if has_auth and not has_owner and not has_custom_function and not has_validation:
+                return "WriteWithoutValidation"
+
+        return None
+
+    def _classify_condition_fallback(self, condition, wildcards, operations):
         cond = condition.strip()
         if cond == "true":
             return "OpenAccess"
 
-        # Normalize whitespace to handle inconsistent formatting from vibe coders
         cond_no_spaces = cond.replace(" ", "").replace("\n", "").replace("\t", "")
-
         if "request.auth.uid!=null" in cond_no_spaces:
             return "WeakUidCheck"
 
-        # If condition uses custom function calls, skip pattern matching
-        # to avoid false positives on role-based auth systems
         has_custom_function = bool(re.search(r'\b(?!request|resource)\w+\s*\(', cond))
-
         has_auth = "request.auth" in cond_no_spaces
         has_owner = any(
-            f"request.auth.uid=={w}" in cond_no_spaces or
-            f"{w}==request.auth.uid" in cond_no_spaces
-            for w in wildcards
+            f"request.auth.uid=={wildcard}" in cond_no_spaces or
+            f"{wildcard}==request.auth.uid" in cond_no_spaces
+            for wildcard in wildcards
         )
         is_user_path = any(
             keyword in " ".join(wildcards).lower()
@@ -193,6 +262,131 @@ class FirebaseRuleAnalyzer:
                 return "WriteWithoutValidation"
 
         return None
+
+    def _has_auth_check(self, node):
+        for current in self._walk(node):
+            if not isinstance(current, BinaryOp):
+                continue
+            if current.operator == "!=":
+                if self._is_auth_null_pair(current.left, current.right):
+                    return True
+                if self._is_auth_null_pair(current.right, current.left):
+                    return True
+            if current.operator == "==":
+                if self._node_has_path(current.left, ["request", "auth", "uid"]) and isinstance(current.right, Identifier):
+                    return True
+                if self._node_has_path(current.right, ["request", "auth", "uid"]) and isinstance(current.left, Identifier):
+                    return True
+        return False
+
+    def _has_owner_check(self, node, wildcards):
+        for current in self._walk(node):
+            if not isinstance(current, BinaryOp) or current.operator != "==":
+                continue
+            if self._is_uid_owner_pair(current.left, current.right, wildcards):
+                return True
+            if self._is_uid_owner_pair(current.right, current.left, wildcards):
+                return True
+        return False
+
+    def _has_weak_uid_check(self, node):
+        for current in self._walk(node):
+            if isinstance(current, BinaryOp) and current.operator in {"==", "!="}:
+                if self._is_uid_null_pair(current.left, current.right):
+                    return True
+                if self._is_uid_null_pair(current.right, current.left):
+                    return True
+            if isinstance(current, UnaryOp) and self._node_has_path(current.operand, ["request", "auth", "uid"]):
+                return True
+        return False
+
+    def _has_custom_function_call(self, node):
+        for current in self._walk(node):
+            if not isinstance(current, Call):
+                continue
+            root_name = self._root_identifier_name(current.callee)
+            if root_name not in {"request", "resource"}:
+                return True
+        return False
+
+    def _contains_reference(self, node, path_prefix):
+        for current in self._walk(node):
+            if self._node_has_prefix(current, path_prefix):
+                return True
+        return False
+
+    def _is_uid_owner_pair(self, left, right, wildcards):
+        if not self._node_has_path(left, ["request", "auth", "uid"]):
+            return False
+        return isinstance(right, Identifier) and right.name in set(wildcards)
+
+    def _is_uid_null_pair(self, left, right):
+        return self._node_has_path(left, ["request", "auth", "uid"]) and isinstance(right, Literal) and right.value is None
+
+    def _is_auth_null_pair(self, left, right):
+        return (
+            self._node_has_path(left, ["request", "auth"])
+            and isinstance(right, Literal)
+            and right.value is None
+        ) or (
+            self._node_has_path(left, ["request", "auth", "uid"])
+            and isinstance(right, Literal)
+            and right.value is None
+        )
+
+    def _node_has_path(self, node, path):
+        return self._node_path(node) == path
+
+    def _node_has_prefix(self, node, path_prefix):
+        path = self._node_path(node)
+        return path is not None and path[:len(path_prefix)] == path_prefix
+
+    def _node_path(self, node):
+        if isinstance(node, Identifier):
+            return [node.name]
+
+        if isinstance(node, MemberAccess):
+            base = self._node_path(node.obj)
+            if base is None:
+                return None
+
+            if isinstance(node.property, Identifier):
+                return base + [node.property.name]
+
+            if node.computed and isinstance(node.property, Literal) and isinstance(node.property.value, str):
+                return base + [node.property.value]
+
+        return None
+
+    def _root_identifier_name(self, node):
+        path = self._node_path(node)
+        if path:
+            return path[0]
+        if isinstance(node, Call):
+            return self._root_identifier_name(node.callee)
+        return None
+
+    def _walk(self, node):
+        if node is None:
+            return
+
+        yield node
+
+        if isinstance(node, UnaryOp):
+            yield from self._walk(node.operand)
+        elif isinstance(node, BinaryOp):
+            yield from self._walk(node.left)
+            yield from self._walk(node.right)
+        elif isinstance(node, MemberAccess):
+            yield from self._walk(node.obj)
+            yield from self._walk(node.property)
+        elif isinstance(node, Call):
+            yield from self._walk(node.callee)
+            for argument in node.arguments:
+                yield from self._walk(argument)
+        elif isinstance(node, ArrayLiteral):
+            for element in node.elements:
+                yield from self._walk(element)
 
     def _generate_fix(self, path, wildcards, vuln_type, operations):
         """Generate recommended fix code based on path context and vuln type"""
