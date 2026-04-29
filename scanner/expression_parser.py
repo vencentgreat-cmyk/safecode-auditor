@@ -189,6 +189,8 @@ def _read_identifier(expression, start):
     if raw in KEYWORDS:
         kind = "BOOLEAN" if isinstance(KEYWORDS[raw], bool) else "NULL"
         return Token(kind, KEYWORDS[raw], start), i
+    if raw == "in":
+        return Token("IN", raw, start), i
     return Token("IDENT", raw, start), i
 
 
@@ -224,8 +226,16 @@ class ExpressionParser:
         return node
 
     def _parse_equality(self):
-        node = self._parse_comparison()
+        node = self._parse_in()
         while self._match("EQ", "NE"):
+            operator = self._previous().value
+            right = self._parse_in()
+            node = BinaryOp(operator, node, right)
+        return node
+
+    def _parse_in(self):
+        node = self._parse_comparison()
+        while self._match("IN"):
             operator = self._previous().value
             right = self._parse_comparison()
             node = BinaryOp(operator, node, right)

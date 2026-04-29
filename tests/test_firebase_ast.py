@@ -51,4 +51,24 @@ def test_invalid_expression_does_not_crash():
     findings = analyzer.analyze(rules)
 
     assert isinstance(findings, list)
+def test_owner_check_via_resource_data_ownerid_is_safe():
+    rules = """
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.ownerId;
+    }
+    """
+    analyzer = FirebaseRuleAnalyzer()
+    findings = analyzer.analyze(rules)
+
+    assert len(findings) == 0
+def test_owner_check_via_resource_data_ownerid_reverse_order_is_safe():
+    rules = """
+    match /users/{userId} {
+      allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
+    }
+    """
+    analyzer = FirebaseRuleAnalyzer()
+    findings = analyzer.analyze(rules)
+
+    assert len(findings) == 0
    

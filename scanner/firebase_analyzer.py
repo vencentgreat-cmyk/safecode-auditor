@@ -138,7 +138,6 @@ class FirebaseRuleAnalyzer:
                 "condition_ast": self._parse_condition_ast(condition),
             })
 
-        # Only flag bare allow with write operations, not bare read-only
         bare = re.compile(r'allow\s+([\w,\s]+)\s*;')
         for m in bare.finditer(clean):
             if ': if' in clean[max(0, m.start()-5):m.end()]:
@@ -155,6 +154,7 @@ class FirebaseRuleAnalyzer:
         return rules
 
     def _parse_condition_ast(self, condition):
+        """Parse a condition string into an AST node"""
         if not condition:
             return None
         try:
@@ -179,6 +179,17 @@ class FirebaseRuleAnalyzer:
 
             vuln = self._classify_condition(condition, condition_ast, block.wildcards, operations)
             if vuln:
+                # Skip lower-severity findings if OpenAccess already reported for same path+ops
+                if vuln != "OpenAccess":
+                    already_open = any(
+                        f["path"] == block.path
+                        and f["vuln_type"] == "OpenAccess"
+                        and bool(set(f["operations"]) & set(operations))
+                        for f in self.findings
+                    )
+                    if already_open:
+                        continue
+
                 self.findings.append({
                     "file": filepath,
                     "path": block.path,
@@ -231,6 +242,7 @@ class FirebaseRuleAnalyzer:
         return None
 
     def _classify_condition_fallback(self, condition, wildcards, operations):
+        """Fallback classification using string heuristics when AST parse fails"""
         cond = condition.strip()
         if cond == "true":
             return "OpenAccess"
@@ -264,6 +276,7 @@ class FirebaseRuleAnalyzer:
         return None
 
     def _has_auth_check(self, node):
+        """Check if the AST contains an authentication check"""
         for current in self._walk(node):
             if not isinstance(current, BinaryOp):
                 continue
@@ -280,6 +293,7 @@ class FirebaseRuleAnalyzer:
         return False
 
     def _has_owner_check(self, node, wildcards):
+        """Check if the AST contains an ownership check"""
         for current in self._walk(node):
             if not isinstance(current, BinaryOp) or current.operator != "==":
                 continue
@@ -287,9 +301,14 @@ class FirebaseRuleAnalyzer:
                 return True
             if self._is_uid_owner_pair(current.right, current.left, wildcards):
                 return True
+            if self._is_uid_resource_owner_field_pair(current.left, current.right):
+                return True
+            if self._is_uid_resource_owner_field_pair(current.right, current.left):
+                return True
         return False
 
     def _has_weak_uid_check(self, node):
+        """Check if the AST contains a weak UID check"""
         for current in self._walk(node):
             if isinstance(current, BinaryOp) and current.operator in {"==", "!="}:
                 if self._is_uid_null_pair(current.left, current.right):
@@ -301,6 +320,7 @@ class FirebaseRuleAnalyzer:
         return False
 
     def _has_custom_function_call(self, node):
+        """Check if the AST contains a custom function call"""
         for current in self._walk(node):
             if not isinstance(current, Call):
                 continue
@@ -310,20 +330,43 @@ class FirebaseRuleAnalyzer:
         return False
 
     def _contains_reference(self, node, path_prefix):
+        """Check if the AST contains a reference to a path prefix"""
         for current in self._walk(node):
             if self._node_has_prefix(current, path_prefix):
                 return True
         return False
 
     def _is_uid_owner_pair(self, left, right, wildcards):
+        """Check if left is request.auth.uid and right is a path wildcard"""
         if not self._node_has_path(left, ["request", "auth", "uid"]):
             return False
         return isinstance(right, Identifier) and right.name in set(wildcards)
 
+    def _is_uid_resource_owner_field_pair(self, left, right):
+        """Check if left is request.auth.uid and right is a resource.data owner field"""
+        owner_field_paths = (
+            ["resource", "data", "uid"],
+            ["resource", "data", "userId"],
+            ["resource", "data", "ownerId"],
+            ["resource", "data", "accountId"],
+            ["resource", "data", "memberId"],
+            ["resource", "data", "profileId"],
+        )
+        return (
+            self._node_has_path(left, ["request", "auth", "uid"])
+            and self._node_path(right) in owner_field_paths
+        )
+
     def _is_uid_null_pair(self, left, right):
-        return self._node_has_path(left, ["request", "auth", "uid"]) and isinstance(right, Literal) and right.value is None
+        """Check if left is request.auth.uid and right is null"""
+        return (
+            self._node_has_path(left, ["request", "auth", "uid"])
+            and isinstance(right, Literal)
+            and right.value is None
+        )
 
     def _is_auth_null_pair(self, left, right):
+        """Check if left is request.auth and right is null"""
         return (
             self._node_has_path(left, ["request", "auth"])
             and isinstance(right, Literal)
@@ -335,13 +378,16 @@ class FirebaseRuleAnalyzer:
         )
 
     def _node_has_path(self, node, path):
+        """Check if node represents exactly the given path"""
         return self._node_path(node) == path
 
     def _node_has_prefix(self, node, path_prefix):
+        """Check if node path starts with the given prefix"""
         path = self._node_path(node)
         return path is not None and path[:len(path_prefix)] == path_prefix
 
     def _node_path(self, node):
+        """Extract the path of a node as a list of strings"""
         if isinstance(node, Identifier):
             return [node.name]
 
@@ -349,16 +395,15 @@ class FirebaseRuleAnalyzer:
             base = self._node_path(node.obj)
             if base is None:
                 return None
-
             if isinstance(node.property, Identifier):
                 return base + [node.property.name]
-
             if node.computed and isinstance(node.property, Literal) and isinstance(node.property.value, str):
                 return base + [node.property.value]
 
         return None
 
     def _root_identifier_name(self, node):
+        """Get the root identifier name of a node"""
         path = self._node_path(node)
         if path:
             return path[0]
@@ -367,6 +412,7 @@ class FirebaseRuleAnalyzer:
         return None
 
     def _walk(self, node):
+        """Walk the AST tree yielding all nodes"""
         if node is None:
             return
 
