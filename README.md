@@ -35,24 +35,22 @@ Most security scanners use string matching to detect Firebase rule issues. SafeC
 
 The Firebase Analyzer parses rule conditions into an **Abstract Syntax Tree (AST)** using a custom recursive descent parser. This enables structured semantic analysis instead of raw text matching.
 
-**Old approach (string matching):**
+Old approach (string matching):
 
     Firebase Rule → string → regex match → detect issue
 
-Problems: order-sensitive (`A==B` ≠ `B==A`), whitespace-sensitive, cannot understand logic structure.
-
-**New approach (AST-based):**
+New approach (AST-based):
 
     Firebase Rule → tokenize → parse → AST → semantic analysis → detect issue
 
 The analyzer walks the AST to extract signals:
 - `has_auth` — does the condition check authentication?
-- `has_owner` — is `request.auth.uid` bound to a path variable?
+- `has_owner` — is `request.auth.uid` bound to a path variable or `resource.data` owner field?
 - `has_weak_uid` — is `uid != null` used instead of `uid == userId`?
 - `has_validation` — is `request.resource.data` referenced in write rules?
 - `has_custom_function` — are custom auth helpers like `isAuthorised()` present?
 
-If the AST parser cannot parse an expression, the analyzer automatically falls back to string matching — ensuring no rules are silently skipped.
+If the AST parser cannot parse an expression, the analyzer automatically falls back to string matching.
 
 ---
 
@@ -80,27 +78,6 @@ safecode ./your_project
 pip install pytest
 python main.py ./your_project
 ```
-
-**Example output:**
-============================================================
-SafeCode Auditor - Vibe Coding Security Scanner
-🔍 Scanning: ./your_project
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MODULE 3 — FIREBASE ANALYZER (logic vulnerabilities)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[1] 🔴 CRITICAL — OpenAccess
-Path : /users/{document}
-Ops  : read
-Why  : Using 'if true' allows anyone on the internet to read data without credentials.
-Fix  : Replace 'if true' with an authentication check:
-allow read: if request.auth != null && request.auth.uid == document;
-==============================================================
-SCAN SUMMARY
-🔴 CRITICAL : 3
-🟠 HIGH     : 2
-🟡 MEDIUM   : 1
-──────────────────────────────
-TOTAL       : 6 issue(s) found
 
 ---
 
@@ -171,7 +148,7 @@ A social media clone — representative of AI-assisted development patterns.
     ├── safecode_auditor/
     │   └── cli.py                 # CLI entry point for pip install
     ├── test_targets/              # Intentionally vulnerable files for testing
-    ├── tests/                     # Automated test suite (21/21 passing)
+    ├── tests/                     # Automated test suite (26/26 passing)
     ├── main.py                    # Direct run entry point
     └── pyproject.toml             # Package configuration
 
@@ -181,10 +158,10 @@ A social media clone — representative of AI-assisted development patterns.
 
 ```bash
 pytest tests/ -v
-# 21 passed in 0.07s
+# 26 passed in 0.11s
 ```
 
-21 tests cover real-world vulnerability patterns, AST semantic analysis correctness, and edge cases including invalid expression fallback.
+26 tests cover real-world vulnerability patterns, AST semantic analysis correctness, `in` operator support, `resource.data` owner field recognition, and edge cases including invalid expression fallback.
 
 ---
 
@@ -206,6 +183,8 @@ pytest tests/ -v
 - [x] GitHub Actions CI/CD integration
 - [x] Installable CLI tool via `pip install`
 - [x] AST-based semantic analysis for Firebase conditions
+- [x] `in` operator support in expression parser
+- [x] `resource.data` owner field recognition
 - [ ] Context-aware path analysis (`/users` vs `/posts`)
 - [ ] CORS misconfiguration detection
 - [ ] JWT weak secret detection
