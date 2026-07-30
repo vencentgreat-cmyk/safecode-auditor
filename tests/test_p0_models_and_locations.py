@@ -83,3 +83,14 @@ def test_all_four_firebase_rules_have_stable_ids():
         source = f"match /users/{{userId}} {{ {rule} }}"
         finding = FirebaseRuleAnalyzer().analyze(source)[0]
         assert finding.rule_id == expected
+def test_write_with_owner_check_but_no_data_validation_triggers_fire003():
+    source = """
+    match /users/{userId} {
+      allow write: if request.auth.uid == userId;
+    }
+    """
+
+    findings = FirebaseRuleAnalyzer().analyze(source)
+    rule_ids = {finding.rule_id for finding in findings}
+
+    assert "FIRE003" in rule_ids
