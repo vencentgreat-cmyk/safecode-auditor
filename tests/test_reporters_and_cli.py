@@ -1,5 +1,5 @@
 import json
-
+from safecode_auditor.reporters.terminal import print_secret_finding
 from safecode_auditor import cli
 from safecode_auditor.baseline import load_baseline
 from safecode_auditor.reporters.json_reporter import build_json_report
@@ -121,3 +121,40 @@ def test_ignore_rule_suppresses_selected_rule(tmp_path, capsys):
     report = json.loads(capsys.readouterr().out)
 
     assert report["summary"]["total"] == 0
+def _secret_finding(secret):
+    return {
+        "file": "app.py",
+        "line": 3,
+        "rule": "OpenAI API Key",
+        "content": f'OPENAI_API_KEY = "{secret}"',
+        "fix": "Move the credential to an environment variable.",
+    }
+
+
+def test_json_report_redacts_secret_source_content():
+    secret = "sk-proj-abcdefghijklmnopqrstuvwxyz"
+
+    report = build_json_report([_secret_finding(secret)])
+    serialized = json.dumps(report)
+
+    assert secret not in serialized
+    assert report["findings"][0]["description"].startswith("[REDACTED")
+    assert report["findings"][0]["explanation"].startswith("[REDACTED")
+
+
+def test_sarif_report_redacts_secret_source_content():
+    secret = "sk-proj-abcdefghijklmnopqrstuvwxyz"
+
+    report = build_sarif_report([_secret_finding(secret)])
+
+    assert secret not in json.dumps(report)
+
+
+def test_terminal_report_redacts_secret_source_content(capsys):
+    secret = "sk-proj-abcdefghijklmnopqrstuvwxyz"
+
+    print_secret_finding(1, _secret_finding(secret))
+    output = capsys.readouterr().out
+
+    assert secret not in output
+    assert "[REDACTED" in output
