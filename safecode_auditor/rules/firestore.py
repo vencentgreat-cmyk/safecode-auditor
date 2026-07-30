@@ -90,7 +90,6 @@ def _write_no_validation(context: RuleContext) -> bool:
     return (
         bool({"write", "create", "update"} & set(context.operations))
         and context.signals["has_auth"]
-        and not context.signals["has_owner"]
         and not context.signals["has_custom_function"]
         and not context.signals["has_validation"]
     )
