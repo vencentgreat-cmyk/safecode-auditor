@@ -66,14 +66,20 @@ def scan_file(filepath):
 
 def scan_directory(directory):
     """Recursively scan an entire directory for security issues"""
+    if os.path.isfile(directory):
+        return scan_file(directory)
+
     all_findings = []
     extensions = (".py", ".js", ".ts", ".env", ".json", ".yml", ".yaml")
 
     for root, dirs, files in os.walk(directory):
         # Skip directories that don't need scanning
-        dirs[:] = [d for d in dirs if d not in ["node_modules", ".git", "__pycache__"]]
+        dirs[:] = sorted(
+            d for d in dirs
+            if d not in ["node_modules", ".git", "__pycache__"]
+        )
 
-        for filename in files:
+        for filename in sorted(files):
             if filename.endswith(extensions):
                 filepath = os.path.join(root, filename)
                 findings = scan_file(filepath)

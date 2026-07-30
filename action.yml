@@ -1,0 +1,89 @@
+name: SafeCode Auditor
+description: Scan Firebase Security Rules and application secrets in pull requests
+author: Yuxin Yang
+
+branding:
+  icon: shield
+  color: red
+
+inputs:
+  path:
+    description: File or directory to scan
+    required: false
+    default: .
+  fail-on:
+    description: Minimum severity that fails the check
+    required: false
+    default: high
+  baseline:
+    description: Optional baseline file committed to the repository
+    required: false
+    default: ""
+  ignore-rules:
+    description: Optional comma-separated rule IDs to ignore
+    required: false
+    default: ""
+  upload-sarif:
+    description: Upload results to GitHub Code Scanning
+    required: false
+    default: "true"
+
+outputs:
+  sarif-file:
+    description: Path to the generated SARIF report
+    value: ${{ steps.paths.outputs.sarif }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set report path
+      id: paths
+      shell: bash
+      run: echo "sarif=${RUNNER_TEMP}/saferules-results.sarif" >> "$GITHUB_OUTPUT"
+
+    - name: Install SafeCode Auditor
+      shell: bash
+      run: python -m pip install "${GITHUB_ACTION_PATH}"
+
+    - name: Scan repository
+      id: scan
+      continue-on-error: true
+      shell: bash
+      env:
+        SAFERULES_TARGET: ${{ inputs.path }}
+        SAFERULES_FAIL_ON: ${{ inputs['fail-on'] }}
+        SAFERULES_BASELINE: ${{ inputs.baseline }}
+        SAFERULES_IGNORE: ${{ inputs['ignore-rules'] }}
+        SAFERULES_SARIF: ${{ steps.paths.outputs.sarif }}
+      run: |
+        args=(
+          "$SAFERULES_TARGET"
+          --format sarif
+          --output "$SAFERULES_SARIF"
+          --fail-on "$SAFERULES_FAIL_ON"
+        )
+        if [[ -n "$SAFERULES_BASELINE" ]]; then
+          args+=(--baseline "$SAFERULES_BASELINE")
+        fi
+        IFS=',' read -ra ignored <<< "$SAFERULES_IGNORE"
+        for rule_id in "${ignored[@]}"; do
+          rule_id="${rule_id//[[:space:]]/}"
+          if [[ -n "$rule_id" ]]; then
+            args+=(--ignore-rule "$rule_id")
+          fi
+        done
+        safecode "${args[@]}"
+
+    - name: Upload SARIF
+      if: ${{ always() && inputs['upload-sarif'] == 'true' }}
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ steps.paths.outputs.sarif }}
+        category: saferules
+
+    - name: Enforce severity threshold
+      if: ${{ steps.scan.outcome == 'failure' }}
+      shell: bash
+      run: |
+        echo "SafeCode Auditor found an issue at or above '${{ inputs['fail-on'] }}'."
+        exit 2

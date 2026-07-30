@@ -1,194 +1,198 @@
-# SafeCode Auditor 🔍
-![CI](https://github.com/vencentgreat-cmyk/safecode-auditor/actions/workflows/safecode-scan.yml/badge.svg)
+# SafeCode Auditor
 
-> A lightweight security scanner designed for the vibe coding era.
+[![CI](https://github.com/vencentgreat-cmyk/safecode-auditor/actions/workflows/safecode-scan.yml/badge.svg)](https://github.com/vencentgreat-cmyk/safecode-auditor/actions/workflows/safecode-scan.yml)
 
-As AI-generated code becomes mainstream, developers often ship apps with hardcoded secrets, exposed API keys, and misconfigured databases. SafeCode Auditor automatically detects these vulnerabilities before they reach production.
+SafeCode Auditor is a PR-ready security scanner for Firebase Security Rules,
+hardcoded credentials, and unsafe application configuration. Its Firestore
+analyzer parses rule conditions into an AST, reports exact source locations,
+and emits JSON or SARIF for CI and GitHub Code Scanning.
 
----
+## What it detects
 
-## The Problem
+| Rule ID | Severity | Finding |
+|---|---:|---|
+| `FIRE001` | Critical | Public access through `if true` or a bare write rule |
+| `FIRE002` | High | Authentication without an ownership check |
+| `FIRE003` | High | Authenticated writes without data validation |
+| `FIRE004` | Medium | A UID existence check used as authorization |
+| `SEC001`–`SEC007` | High | API keys, tokens, passwords, and database credentials |
+| `CFG001`–`CFG007` | High | Unsafe `.env`, Docker, and Firebase configuration |
 
-Vibe coders using tools like Cursor or ChatGPT frequently generate code that contains:
-- Hardcoded API keys and passwords committed to GitHub
-- `.env` files with exposed credentials
-- Docker configurations with plaintext secrets
-- Firebase databases open to the public internet
+When a Firestore expression cannot be parsed, heuristic findings are retained
+but explicitly marked as low confidence.
 
-SafeCode Auditor catches these issues in seconds.
+## Install and scan
 
----
-
-## Features
-
-| Module | What it detects |
-|---|---|
-| Secret Sniffer | OpenAI keys, AWS credentials, GitHub tokens, hardcoded passwords |
-| Config Checker | `.env` leaks, Docker secrets, Firebase open read/write rules |
-| Firebase Analyzer | AST-based logic vulnerability detection: OpenAccess, AuthButNoOwner, WeakUidCheck, WriteWithoutValidation |
-
----
-
-## How the Firebase Analyzer Works
-
-Most security scanners use string matching to detect Firebase rule issues. SafeCode Auditor goes further.
-
-The Firebase Analyzer parses rule conditions into an **Abstract Syntax Tree (AST)** using a custom recursive descent parser. This enables structured semantic analysis instead of raw text matching.
-
-Old approach (string matching):
-
-    Firebase Rule → string → regex match → detect issue
-
-New approach (AST-based):
-
-    Firebase Rule → tokenize → parse → AST → semantic analysis → detect issue
-
-The analyzer walks the AST to extract signals:
-- `has_auth` — does the condition check authentication?
-- `has_owner` — is `request.auth.uid` bound to a path variable or `resource.data` owner field?
-- `has_weak_uid` — is `uid != null` used instead of `uid == userId`?
-- `has_validation` — is `request.resource.data` referenced in write rules?
-- `has_custom_function` — are custom auth helpers like `isAuthorised()` present?
-
-If the AST parser cannot parse an expression, the analyzer automatically falls back to string matching.
-
----
-
-## Quick Start
-
-**Requirements:** Python 3.11+
-
-**Option 1: Install as CLI tool (recommended)**
+Requires Python 3.11 or newer.
 
 ```bash
 git clone https://github.com/vencentgreat-cmyk/safecode-auditor.git
 cd safecode-auditor
-pip install .
+python -m pip install .
 ```
 
-Then scan any project from anywhere:
+Scan a directory or one rules file:
 
 ```bash
-safecode ./your_project
+safecode .
+safecode firestore.rules
 ```
 
-**Option 2: Run directly**
+The default terminal report remains suitable for local use. Machine-readable
+reports are deterministic and versioned:
 
 ```bash
-pip install pytest
-python main.py ./your_project
+safecode . --format json
+safecode . --format sarif --output saferules.sarif
 ```
 
----
-
-## Real-World Testing
-
-To validate accuracy, SafeCode Auditor was tested against 3 real open-source Firebase projects on GitHub, covering different levels of security maturity. Project names and specific details have been anonymized to follow responsible disclosure practices.
-
----
-
-### Sample A: Social App (beginner-level security)
-
-A Firebase-based social application with minimal security configuration.
-
-| Severity | Type | Path | Assessment |
-|---|---|---|---|
-| CRITICAL | OpenAccess | /adminSettings | ✅ True positive — admin config publicly readable |
-| CRITICAL | OpenAccess | /users | ✅ True positive — all user data publicly readable |
-| CRITICAL | OpenAccess | /posts | ✅ True positive — all posts publicly readable |
-
-**7 total findings. All confirmed true positives.**
-
----
-
-### Sample B: Team Management App (intermediate security)
-
-A more mature project using custom role-based authentication functions.
-
-| Severity | Type | Path | Assessment |
-|---|---|---|---|
-| CRITICAL | OpenAccess | /reports | ✅ True positive — `allow read, write;` with no condition |
-| CRITICAL | OpenAccess | /division-users | ✅ True positive — `allow create;` with no condition |
-| CRITICAL | OpenAccess | /division-codes | ✅ True positive — `allow write;` with no condition |
-| HIGH | AuthButNoOwner | /users | ⚠️ False positive — custom `isAuthorised()` function handles access |
-
-**11 total findings, 3 confirmed true positives. False positives occur when projects use custom auth functions.**
-
----
-
-### Sample C: Social Clone App (typical vibe-coded structure)
-
-A social media clone — representative of AI-assisted development patterns.
-
-| Severity | Type | Path | Assessment |
-|---|---|---|---|
-| HIGH | AuthButNoOwner | /users | ✅ True positive — any logged-in user can read all user profiles |
-| CRITICAL | OpenAccess | /tweets | ⚠️ Intentional — public read is by design for a social feed |
-
-**4 total findings, 1 confirmed true positive.**
-
----
-
-### Known Limitations
-
-- **Custom auth functions**: Projects using role-based helpers like `isAuthorised()` generate false positives on `AuthButNoOwner` and `WriteWithoutValidation` checks. The analyzer cannot resolve custom function logic.
-- **Intentional public access**: Public read on content collections is sometimes by design. Context matters.
-- **Best suited for**: Vibe-coded apps and beginner Firebase projects where simple `request.auth` patterns are common.
-
----
-
-## Project Structure
-
-    safecode-auditor/
-    ├── scanner/
-    │   ├── secret_sniffer.py      # Scans source code for hardcoded secrets
-    │   ├── config_checker.py      # Scans config files for dangerous settings
-    │   ├── expression_parser.py   # Recursive descent parser for Firebase conditions
-    │   └── firebase_analyzer.py   # AST-based Firebase Rules vulnerability engine
-    ├── safecode_auditor/
-    │   └── cli.py                 # CLI entry point for pip install
-    ├── test_targets/              # Intentionally vulnerable files for testing
-    ├── tests/                     # Automated test suite (26/26 passing)
-    ├── main.py                    # Direct run entry point
-    └── pyproject.toml             # Package configuration
-
----
-
-## Test Coverage
+Fail CI only when a finding reaches a chosen threshold:
 
 ```bash
-pytest tests/ -v
-# 26 passed in 0.11s
+safecode . --fail-on high
 ```
 
-26 tests cover real-world vulnerability patterns, AST semantic analysis correctness, `in` operator support, `resource.data` owner field recognition, and edge cases including invalid expression fallback.
+Exit codes:
 
----
+| Code | Meaning |
+|---:|---|
+| `0` | Scan completed and no unsuppressed finding met the threshold |
+| `1` | Invalid arguments, target, output, or baseline |
+| `2` | A finding met `--fail-on` |
 
-## Tech Stack
+## Adopt safely with a baseline
 
-- **Language:** Python 3.11+
-- **Core:** Recursive descent parser, AST-based semantic analysis, regex pattern matching
-- **Testing:** pytest
-- **CI/CD:** GitHub Actions
-- **Target files:** `.py`, `.js`, `.ts`, `.env`, `.json`, `.yml`, `.yaml`, `.rules`
+Create a baseline from existing findings:
 
----
+```bash
+safecode . --format json --generate-baseline .saferules-baseline.json
+```
+
+Commit that file and fail only on new High/Critical findings:
+
+```bash
+safecode . \
+  --baseline .saferules-baseline.json \
+  --fail-on high
+```
+
+Suppress an intentionally accepted rule by stable ID:
+
+```bash
+safecode . --ignore-rule FIRE001
+```
+
+`--ignore-rule` can be repeated. Prefer a baseline for existing technical debt;
+use rule suppression only when a rule is intentionally irrelevant to the
+project.
+
+## GitHub Pull Request integration
+
+The repository includes a composite GitHub Action. A consumer workflow needs
+read access to the repository and `security-events: write` to upload SARIF:
+
+```yaml
+name: SafeRules PR Guard
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  saferules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: vencentgreat-cmyk/safecode-auditor@v0
+        with:
+          path: .
+          fail-on: high
+```
+
+Optional Action inputs:
+
+| Input | Default | Purpose |
+|---|---|---|
+| `path` | `.` | File or directory to scan |
+| `fail-on` | `high` | `none`, `low`, `medium`, `high`, or `critical` |
+| `baseline` | empty | Path to a committed baseline |
+| `ignore-rules` | empty | Comma-separated stable rule IDs |
+| `upload-sarif` | `true` | Upload annotations to GitHub Code Scanning |
+
+Private repositories must have GitHub Code Security available and enabled for
+SARIF upload. If it is unavailable, set `upload-sarif: "false"`; threshold
+enforcement still works.
+
+A complete workflow template is available at
+[`examples/saferules-workflow.yml`](examples/saferules-workflow.yml).
+
+## Firestore analysis architecture
+
+```text
+source
+  → offset-preserving comment state machine
+  → nested match/allow parser
+  → condition tokenizer and recursive-descent AST parser
+  → semantic signals
+  → FIRE001–FIRE004 registry
+  → typed Finding with Location, Severity, Confidence, and Fix
+  → terminal / JSON / SARIF reporters
+```
+
+Comment removal preserves every character offset and newline position. This
+allows an `allow` rule to be mapped back to its exact start line and column,
+including inside nested `match` blocks. Strings containing `//`, such as URLs,
+are not treated as comments.
+
+The original dictionary-style finding access remains compatible with v0.1,
+while the versioned JSON schema exposes stable IDs, confidence, locations, and
+structured fixes.
+
+## Development
+
+```bash
+python -m pip install pytest
+python -m pytest -q
+python -m compileall -q safecode_auditor scanner main.py
+```
+
+The test suite covers the expression parser, all four Firestore rules,
+backward-compatible output, nested source locations, comment edge cases,
+deterministic JSON/SARIF, single-file scanning, thresholds, suppression, and
+baseline behavior.
+
+## Current boundaries
+
+- Custom authorization helper bodies are recognized but not interpreted.
+- Public read access may be intentional for public content.
+- Baselines suppress exact stable fingerprints; semantic permission diff is a
+  later milestone.
+- The Action and SARIF document can be validated locally, but Code Scanning
+  annotations require a real GitHub workflow run.
 
 ## Roadmap
 
-- [x] Secret sniffer for source code files
-- [x] Config checker for `.env`, Docker, Firebase
-- [x] Firebase logic vulnerability analyzer
-- [x] GitHub Actions CI/CD integration
-- [x] Installable CLI tool via `pip install`
-- [x] AST-based semantic analysis for Firebase conditions
-- [x] `in` operator support in expression parser
-- [x] `resource.data` owner field recognition
-- [ ] Context-aware path analysis (`/users` vs `/posts`)
-- [ ] CORS misconfiguration detection
-- [ ] JWT weak secret detection
+- [x] Typed and backward-compatible finding model
+- [x] Reliable Firestore source locations
+- [x] Stable rule IDs and confidence
+- [x] Deterministic JSON and SARIF
+- [x] Single-file and directory scanning
+- [x] Severity thresholds, baseline, and rule suppression
+- [x] Composite GitHub Action
+- [ ] Coarse before/after permission diff
+- [ ] Firebase Emulator verification for high-risk findings
+- [ ] Semantic condition implication
 
----
+## License
 
-*Built to address real security risks in the vibe coding era.*
+Add a license before publishing the Action to the GitHub Marketplace. MIT is a
+good default for an open-source developer tool.

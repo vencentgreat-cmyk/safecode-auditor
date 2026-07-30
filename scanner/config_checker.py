@@ -112,14 +112,20 @@ def scan_config_file(filepath):
 
 def scan_config_directory(directory):
     """Scan entire directory for dangerous config files"""
+    if os.path.isfile(directory):
+        return scan_config_file(directory)
+
     all_findings = []
     target_files = {".env", "docker-compose.yml", "docker-compose.yaml",
                     "database.rules.json", "firebase.json"}
 
     for root, dirs, files in os.walk(directory):
-        dirs[:] = [d for d in dirs if d not in ["node_modules", ".git", "__pycache__"]]
+        dirs[:] = sorted(
+            d for d in dirs
+            if d not in ["node_modules", ".git", "__pycache__"]
+        )
 
-        for filename in files:
+        for filename in sorted(files):
             if filename.lower() in target_files or filename.endswith(".env"):
                 filepath = os.path.join(root, filename)
                 findings = scan_config_file(filepath)
