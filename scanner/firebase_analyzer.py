@@ -1,6 +1,9 @@
 import re
 import os
 
+from safecode_auditor.parsing.comments import strip_comments_preserve_offsets
+from safecode_auditor.rules.firestore import FIRESTORE_RULES, RuleContext
+
 try:
     from .expression_parser import (
         ArrayLiteral,
@@ -26,38 +29,14 @@ except ImportError:
         parse_expression,
     )
 
-# ── Vulnerability pattern definitions ──────────────────────────────────────────
-VULN_PATTERNS = {
-    "OpenAccess": {
-        "severity": "CRITICAL",
-        "description": "Collection is fully open to the public, no authentication required.",
-        "explanation": "Using 'if true' allows anyone on the internet to read or write data without any credentials."
-    },
-    "AuthButNoOwner": {
-        "severity": "HIGH",
-        "description": "Authentication is required but any logged-in user can access all other users' data.",
-        "explanation": "Checking 'request.auth != null' only verifies the user is logged in. It does NOT prevent user A from reading user B's private data."
-    },
-    "WriteWithoutValidation": {
-        "severity": "HIGH",
-        "description": "Write operation has no data validation.",
-        "explanation": "Allowing writes without validating request.resource.data means users can write any data structure, including malicious payloads."
-    },
-    "WeakUidCheck": {
-        "severity": "MEDIUM",
-        "description": "UID check uses != null instead of == userId.",
-        "explanation": "'request.auth.uid != null' only checks that a UID exists, not that it matches the resource owner. Any logged-in user passes this check."
-    }
-}
-
-
 class MatchBlock:
     """Represents a single match block in Firebase Rules"""
-    def __init__(self, path, wildcards, rules, children):
+    def __init__(self, path, wildcards, rules, children, offset):
         self.path = path
         self.wildcards = wildcards
         self.rules = rules
         self.children = children
+        self.offset = offset
 
     def __repr__(self):
         return f"MatchBlock(path={self.path}, wildcards={self.wildcards}, rules={self.rules})"
@@ -71,26 +50,40 @@ class FirebaseRuleAnalyzer:
 
     def __init__(self):
         self.findings = []
+        self._source = ""
+        self._filepath = "firestore.rules"
 
     def parse(self, content):
         """Parse raw rules content into a list of MatchBlock trees"""
-        content = re.sub(r'//[^\n]*', '', content)
-        content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
-        return self._parse_blocks(content)
+        self._source = content
+        cleaned = strip_comments_preserve_offsets(content)
+        return self._parse_blocks(cleaned, base_offset=0)
 
     def _extract_block(self, content, start):
-        """Extract content inside matching braces starting at position"""
+        """Return block content and the index immediately after its closing brace."""
         depth = 1
         i = start
+        quote = None
+        escaped = False
         while i < len(content) and depth > 0:
-            if content[i] == '{':
+            char = content[i]
+            if quote is not None:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = None
+            elif char in {"'", '"'}:
+                quote = char
+            elif char == '{':
                 depth += 1
-            elif content[i] == '}':
+            elif char == '}':
                 depth -= 1
             i += 1
-        return content[start:i-1]
+        return content[start:i - 1], i
 
-    def _parse_blocks(self, content):
+    def _parse_blocks(self, content, base_offset=0):
         """Recursively parse all match blocks in content"""
         blocks = []
         pattern = re.compile(r'match\s+((?:/[\w{}\-=*]+)+)\s*\{')
@@ -102,29 +95,53 @@ class FirebaseRuleAnalyzer:
                 break
 
             path = m.group(1)
+            block_start = m.end()
+            block_content, block_end = self._extract_block(content, block_start)
+            absolute_block_start = base_offset + block_start
 
             if '/databases/' in path and '/documents' in path:
-                block_start = m.end()
-                block_content = self._extract_block(content, block_start)
-                blocks.extend(self._parse_blocks(block_content))
-                i = m.end() + len(block_content)
+                blocks.extend(
+                    self._parse_blocks(block_content, absolute_block_start)
+                )
+                i = block_end
                 continue
 
             wildcards = re.findall(r'\{(\w+)(?:=\*\*)?\}', path)
-            block_start = m.end()
-            block_content = self._extract_block(content, block_start)
+            rules = self._parse_rules(block_content, absolute_block_start)
+            children = self._parse_blocks(block_content, absolute_block_start)
 
-            rules = self._parse_rules(block_content)
-            children = self._parse_blocks(block_content)
-
-            blocks.append(MatchBlock(path, wildcards, rules, children))
-            i = m.end() + len(block_content)
+            blocks.append(
+                MatchBlock(
+                    path,
+                    wildcards,
+                    rules,
+                    children,
+                    base_offset + m.start(),
+                )
+            )
+            i = block_end
 
         return blocks
 
-    def _parse_rules(self, content):
+    def _mask_nested_matches(self, content):
+        """Blank nested match blocks without changing offsets."""
+        result = list(content)
+        pattern = re.compile(r'match\s+((?:/[\w{}\-=*]+)+)\s*\{')
+        i = 0
+        while True:
+            match = pattern.search(content, i)
+            if not match:
+                break
+            _, end = self._extract_block(content, match.end())
+            for index in range(match.start(), end):
+                if result[index] not in {"\n", "\r"}:
+                    result[index] = " "
+            i = end
+        return "".join(result)
+
+    def _parse_rules(self, content, base_offset):
         """Extract allow rules from a block, ignoring nested match blocks"""
-        clean = re.sub(r'match\s+/[^\{]+\{[^}]*\}', '', content, flags=re.DOTALL)
+        clean = self._mask_nested_matches(content)
 
         rules = []
         pattern = re.compile(r'allow\s+([\w,\s]+)\s*:\s*if\s+(.+?);', re.DOTALL)
@@ -136,6 +153,7 @@ class FirebaseRuleAnalyzer:
                 "operations": operations,
                 "condition": condition,
                 "condition_ast": self._parse_condition_ast(condition),
+                "offset": base_offset + m.start(),
             })
 
         bare = re.compile(r'allow\s+([\w,\s]+)\s*;')
@@ -149,6 +167,7 @@ class FirebaseRuleAnalyzer:
                     "operations": operations,
                     "condition": None,
                     "condition_ast": None,
+                    "offset": base_offset + m.start(),
                 })
 
         return rules
@@ -165,6 +184,7 @@ class FirebaseRuleAnalyzer:
     def analyze(self, content, filepath="firestore.rules"):
         """Main entry point: parse and analyze a rules file"""
         self.findings = []
+        self._filepath = filepath
         blocks = self.parse(content)
         for block in blocks:
             self._analyze_block(block, filepath)
@@ -176,104 +196,87 @@ class FirebaseRuleAnalyzer:
             condition = rule["condition"]
             operations = rule["operations"]
             condition_ast = rule.get("condition_ast")
-
-            vuln = self._classify_condition(condition, condition_ast, block.wildcards, operations)
-            if vuln:
-                # Skip lower-severity findings if OpenAccess already reported for same path+ops
-                if vuln != "OpenAccess":
-                    already_open = any(
-                        f["path"] == block.path
-                        and f["vuln_type"] == "OpenAccess"
-                        and bool(set(f["operations"]) & set(operations))
-                        for f in self.findings
-                    )
-                    if already_open:
-                        continue
-
-                self.findings.append({
-                    "file": filepath,
-                    "path": block.path,
-                    "operations": operations,
-                    "condition": condition,
-                    "vuln_type": vuln,
-                    "severity": VULN_PATTERNS[vuln]["severity"],
-                    "description": VULN_PATTERNS[vuln]["description"],
-                    "explanation": VULN_PATTERNS[vuln]["explanation"],
-                    "fix": self._generate_fix(block.path, block.wildcards, vuln, operations)
-                })
+            offset = rule["offset"]
+            line, column = self._line_column(offset)
+            signals = self._condition_signals(
+                condition, condition_ast, block.wildcards
+            )
+            context = RuleContext(
+                file=filepath,
+                path=block.path,
+                wildcards=tuple(block.wildcards),
+                operations=tuple(operations),
+                condition=condition,
+                condition_ast=condition_ast,
+                offset=offset,
+                line=line,
+                column=column,
+                ast_parsed=condition is None or condition_ast is not None,
+                signals=signals,
+            )
+            for definition in FIRESTORE_RULES:
+                finding = definition.evaluate(context)
+                if finding is not None:
+                    self.findings.append(finding)
+                    break
 
         for child in block.children:
             self._analyze_block(child, filepath)
 
-    def _classify_condition(self, condition, condition_ast, wildcards, operations):
-        """Classify a rule condition using parsed AST signals when possible."""
-        if condition is None:
-            return "OpenAccess"
+    def _line_column(self, offset):
+        line_start = self._source.rfind("\n", 0, offset)
+        return self._source.count("\n", 0, offset) + 1, offset - line_start
 
-        if isinstance(condition_ast, Literal) and condition_ast.value is True:
-            return "OpenAccess"
-
-        if condition_ast is None:
-            return self._classify_condition_fallback(condition, wildcards, operations)
-
-        has_auth = self._has_auth_check(condition_ast)
-        has_owner = self._has_owner_check(condition_ast, wildcards)
-        has_weak_uid = self._has_weak_uid_check(condition_ast)
-        has_validation = self._contains_reference(condition_ast, ["request", "resource", "data"])
-        has_custom_function = self._has_custom_function_call(condition_ast)
+    def _condition_signals(self, condition, condition_ast, wildcards):
         is_user_path = any(
             keyword in " ".join(wildcards).lower()
             for keyword in ["user", "member", "account", "profile", "person"]
         )
+        if condition is None:
+            return {
+                "literal_true": True,
+                "has_auth": False,
+                "has_owner": False,
+                "has_weak_uid": False,
+                "has_validation": False,
+                "has_custom_function": False,
+                "is_user_path": is_user_path,
+            }
+        if condition_ast is not None:
+            return {
+                "literal_true": (
+                    isinstance(condition_ast, Literal)
+                    and condition_ast.value is True
+                ),
+                "has_auth": self._has_auth_check(condition_ast),
+                "has_owner": self._has_owner_check(condition_ast, wildcards),
+                "has_weak_uid": self._has_weak_uid_check(condition_ast),
+                "has_validation": self._contains_reference(
+                    condition_ast, ["request", "resource", "data"]
+                ),
+                "has_custom_function": self._has_custom_function_call(
+                    condition_ast
+                ),
+                "is_user_path": is_user_path,
+            }
 
-        if has_weak_uid and not has_owner:
-            return "WeakUidCheck"
-
-        if has_auth and not has_owner and is_user_path and not has_custom_function:
-            read_ops = {"read", "get", "list"}
-            if any(op in read_ops for op in operations):
-                return "AuthButNoOwner"
-
-        write_ops = {"write", "create", "update"}
-        if any(op in write_ops for op in operations):
-            if has_auth and not has_owner and not has_custom_function and not has_validation:
-                return "WriteWithoutValidation"
-
-        return None
-
-    def _classify_condition_fallback(self, condition, wildcards, operations):
-        """Fallback classification using string heuristics when AST parse fails"""
-        cond = condition.strip()
-        if cond == "true":
-            return "OpenAccess"
-
-        cond_no_spaces = cond.replace(" ", "").replace("\n", "").replace("\t", "")
-        if "request.auth.uid!=null" in cond_no_spaces:
-            return "WeakUidCheck"
-
-        has_custom_function = bool(re.search(r'\b(?!request|resource)\w+\s*\(', cond))
-        has_auth = "request.auth" in cond_no_spaces
+        compact = re.sub(r"\s+", "", condition)
         has_owner = any(
-            f"request.auth.uid=={wildcard}" in cond_no_spaces or
-            f"{wildcard}==request.auth.uid" in cond_no_spaces
+            f"request.auth.uid=={wildcard}" in compact
+            or f"{wildcard}==request.auth.uid" in compact
             for wildcard in wildcards
         )
-        is_user_path = any(
-            keyword in " ".join(wildcards).lower()
-            for keyword in ["user", "member", "account", "profile", "person"]
-        )
-
-        if has_auth and not has_owner and is_user_path and not has_custom_function:
-            read_ops = {"read", "get", "list"}
-            if any(op in read_ops for op in operations):
-                return "AuthButNoOwner"
-
-        write_ops = {"write", "create", "update"}
-        if any(op in write_ops for op in operations):
-            if has_auth and not has_owner and not has_custom_function and "request.resource.data" not in cond_no_spaces:
-                return "WriteWithoutValidation"
-
-        return None
+        return {
+            "literal_true": compact == "true",
+            "has_auth": "request.auth" in compact,
+            "has_owner": has_owner,
+            "has_weak_uid": "request.auth.uid!=null" in compact,
+            "has_validation": "request.resource.data" in compact,
+            "has_custom_function": bool(
+                re.search(r"\b(?!request|resource)\w+\s*\(", condition)
+            ),
+            "is_user_path": is_user_path,
+        }
 
     def _has_auth_check(self, node):
         """Check if the AST contains an authentication check"""
@@ -434,34 +437,6 @@ class FirebaseRuleAnalyzer:
             for element in node.elements:
                 yield from self._walk(element)
 
-    def _generate_fix(self, path, wildcards, vuln_type, operations):
-        """Generate recommended fix code based on path context and vuln type"""
-        uid_var = wildcards[-1] if wildcards else "userId"
-
-        if vuln_type == "OpenAccess":
-            return f"""Replace 'if true' with an authentication check:
-  allow read: if request.auth != null && request.auth.uid == {uid_var};"""
-
-        if vuln_type == "AuthButNoOwner":
-            return f"""Add owner check to bind the user to their own data:
-  // Current (vulnerable):  if request.auth != null
-  // Fixed:
-  allow read: if request.auth != null && request.auth.uid == {uid_var};"""
-
-        if vuln_type == "WeakUidCheck":
-            return f"""Replace '!= null' with an equality check against the path variable:
-  // Current (vulnerable):  if request.auth.uid != null
-  // Fixed:
-  allow read: if request.auth.uid == {uid_var};"""
-
-        if vuln_type == "WriteWithoutValidation":
-            return f"""Add data validation to write rules:
-  allow write: if request.auth.uid == {uid_var}
-               && request.resource.data.keys().hasOnly(['field1', 'field2']);"""
-
-        return "Review this rule manually."
-
-
 # ── Module-level entry points ──────────────────────────────────────────────────
 
 def scan_firebase_file(filepath):
@@ -478,12 +453,18 @@ def scan_firebase_file(filepath):
 
 def scan_firebase_directory(directory):
     """Scan a directory for all Firebase rules files"""
+    if os.path.isfile(directory):
+        return scan_firebase_file(directory)
+
     findings = []
     target_names = {"firestore.rules", "database.rules.json", "firebase.rules"}
 
     for root, dirs, files in os.walk(directory):
-        dirs[:] = [d for d in dirs if d not in ["node_modules", ".git", "__pycache__"]]
-        for filename in files:
+        dirs[:] = sorted(
+            d for d in dirs
+            if d not in ["node_modules", ".git", "__pycache__"]
+        )
+        for filename in sorted(files):
             if filename.lower() in target_names or filename.endswith(".rules"):
                 filepath = os.path.join(root, filename)
                 findings.extend(scan_firebase_file(filepath))

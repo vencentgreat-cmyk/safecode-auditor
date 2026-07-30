@@ -1,16 +1,30 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "safecode-auditor"
-version = "0.1.0"
-description = "A lightweight security scanner for vibe-coded applications"
+version = "0.2.0"
+description = "A PR-ready security scanner for Firebase rules and application secrets"
 requires-python = ">=3.11"
 dependencies = []
+license = { file = "LICENSE" }
+readme = "README.md"
+authors = [
+  { name = "Yuxin Yang" }
+]
+keywords = ["firebase", "security", "sarif", "static-analysis"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+]
 
 [project.scripts]
 safecode = "safecode_auditor.cli:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["scanner", "safecode_auditor"]
+[tool.setuptools.packages.find]
+include = ["scanner*", "safecode_auditor*"]
