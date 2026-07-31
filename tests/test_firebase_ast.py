@@ -116,5 +116,55 @@ def test_request_data_presence_is_not_write_validation():
     findings = FirebaseRuleAnalyzer().analyze(rules)
 
     vuln_types = [finding["vuln_type"] for finding in findings]
+    assert "WriteWithoutValidation" in vuln_types   
+def test_owner_check_or_auth_only_does_not_guarantee_ownership():
+    rules = """
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId
+                  || request.auth != null;
+    }
+    """
+    findings = FirebaseRuleAnalyzer().analyze(rules)
+
+    vuln_types = [finding["vuln_type"] for finding in findings]
+    assert "AuthButNoOwner" in vuln_types
+
+
+def test_owner_check_on_both_or_branches_is_safe():
+    rules = """
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId
+                  || userId == request.auth.uid;
+    }
+    """
+    findings = FirebaseRuleAnalyzer().analyze(rules)
+
+    assert findings == []
+
+
+def test_validation_on_only_one_or_branch_is_not_guaranteed():
+    rules = """
+    match /posts/{postId} {
+      allow write: if (
+        request.auth != null
+        && request.resource.data.keys().hasOnly(["title"])
+      ) || request.auth != null;
+    }
+    """
+    findings = FirebaseRuleAnalyzer().analyze(rules)
+
+    vuln_types = [finding["vuln_type"] for finding in findings]
     assert "WriteWithoutValidation" in vuln_types
-   
+
+
+def test_negated_validation_is_not_treated_as_safe():
+    rules = """
+    match /posts/{postId} {
+      allow write: if request.auth != null
+                   && !request.resource.data.keys().hasOnly(["title"]);
+    }
+    """
+    findings = FirebaseRuleAnalyzer().analyze(rules)
+
+    vuln_types = [finding["vuln_type"] for finding in findings]
+    assert "WriteWithoutValidation" in vuln_types

@@ -431,8 +431,65 @@ class FirebaseRuleAnalyzer:
 
         return False
 
+    def _condition_guarantees(self, node, predicate):
+        """
+        Determine whether a security predicate is guaranteed on every
+        logical path that can make the condition true.
+        """
+        if node is None:
+            return False
+
+        if isinstance(node, UnaryOp):
+            if node.operator == "!":
+                return False
+
+            return self._condition_guarantees(
+                node.operand,
+                predicate,
+            )
+
+        if isinstance(node, BinaryOp):
+            if node.operator == "&&":
+                return (
+                    self._condition_guarantees(
+                        node.left,
+                        predicate,
+                    )
+                    or self._condition_guarantees(
+                        node.right,
+                        predicate,
+                    )
+                )
+
+            if node.operator == "||":
+                return (
+                    self._condition_guarantees(
+                        node.left,
+                        predicate,
+                    )
+                    and self._condition_guarantees(
+                        node.right,
+                        predicate,
+                    )
+                )
+
+        if predicate(node):
+            return True
+
+        for current, negated in self._walk_with_negation(node):
+            if current is node or negated:
+                continue
+
+            if predicate(current):
+                return True
+
+        return False
+
     def _has_write_validation(self, node):
-        """Check for a recognized write-data validation call."""
+        """
+        Return whether every successful logical branch guarantees
+        a recognized write-data validation.
+        """
         validation_methods = {
             "hasOnly",
             "hasAll",
@@ -441,28 +498,29 @@ class FirebaseRuleAnalyzer:
             "size",
         }
 
-        for current in self._walk(node):
+        def is_validation(current):
             if not isinstance(current, Call):
-                continue
+                return False
 
             if not isinstance(current.callee, MemberAccess):
-                continue
+                return False
 
             property_node = current.callee.property
             if not isinstance(property_node, Identifier):
-                continue
+                return False
 
             if property_node.name not in validation_methods:
-                continue
+                return False
 
-            if self._contains_reference(
+            return self._contains_reference(
                 current,
                 ["request", "resource", "data"],
-            ):
-                return True
+            )
 
-        return False
-
+        return self._condition_guarantees(
+            node,
+            is_validation,
+        )
     def _has_auth_check(self, node):
         """Check if the AST contains an authentication check."""
         for current in self._walk(node):
@@ -505,47 +563,44 @@ class FirebaseRuleAnalyzer:
                     return True
 
         return False
-
     def _has_owner_check(self, node, wildcards):
-        """Check for a non-negated ownership equality."""
-        for current, negated in self._walk_with_negation(node):
-            if negated:
-                continue
+        """
+        Return whether every successful logical branch guarantees
+        an ownership equality.
+        """
 
+        def is_owner_check(current):
             if (
                 not isinstance(current, BinaryOp)
                 or current.operator != "=="
             ):
-                continue
+                return False
 
-            if self._is_uid_owner_pair(
-                current.left,
-                current.right,
-                wildcards,
-            ):
-                return True
+            return (
+                self._is_uid_owner_pair(
+                    current.left,
+                    current.right,
+                    wildcards,
+                )
+                or self._is_uid_owner_pair(
+                    current.right,
+                    current.left,
+                    wildcards,
+                )
+                or self._is_uid_resource_owner_field_pair(
+                    current.left,
+                    current.right,
+                )
+                or self._is_uid_resource_owner_field_pair(
+                    current.right,
+                    current.left,
+                )
+            )
 
-            if self._is_uid_owner_pair(
-                current.right,
-                current.left,
-                wildcards,
-            ):
-                return True
-
-            if self._is_uid_resource_owner_field_pair(
-                current.left,
-                current.right,
-            ):
-                return True
-
-            if self._is_uid_resource_owner_field_pair(
-                current.right,
-                current.left,
-            ):
-                return True
-
-        return False
-
+        return self._condition_guarantees(
+            node,
+            is_owner_check,
+        )
     def _has_weak_uid_check(self, node):
         """Check if the AST contains a weak UID check."""
         for current in self._walk(node):
@@ -716,6 +771,9 @@ class FirebaseRuleAnalyzer:
 
         if isinstance(node, Call):
             return self._root_identifier_name(node.callee)
+
+        if isinstance(node, MemberAccess):
+            return self._root_identifier_name(node.obj)
 
         return None
 
