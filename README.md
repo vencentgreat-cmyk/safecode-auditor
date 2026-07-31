@@ -194,5 +194,4 @@ baseline behavior.
 
 ## License
 
-Add a license before publishing the Action to the GitHub Marketplace. MIT is a
-good default for an open-source developer tool.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
