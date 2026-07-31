@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Iterable
-
+from safecode_auditor import __version__
 from .common import normalize_finding, sort_key
 
 
@@ -100,7 +100,7 @@ def build_sarif_report(findings: Iterable[Any]) -> dict[str, Any]:
                             "https://github.com/vencentgreat-cmyk/"
                             "safecode-auditor"
                         ),
-                        "version": "0.2.0",
+                        "version": __version__,
                         "rules": [
                             definitions[key] for key in sorted(definitions)
                         ],

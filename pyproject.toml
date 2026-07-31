@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "safecode-auditor"
-version = "0.2.1"
+dynamic = ["version"]
 description = "A PR-ready security scanner for Firebase rules and application secrets"
 requires-python = ">=3.11"
 dependencies = []
@@ -29,3 +29,5 @@ safecode = "safecode_auditor.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["scanner*", "safecode_auditor*"]
+[tool.setuptools.dynamic]
+version = {attr = "safecode_auditor.__version__"}
