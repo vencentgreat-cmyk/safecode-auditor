@@ -71,4 +71,50 @@ def test_owner_check_via_resource_data_ownerid_reverse_order_is_safe():
     findings = analyzer.analyze(rules)
 
     assert len(findings) == 0
+def test_authenticated_read_on_generic_user_wildcard_requires_owner_check():
+    rules = """
+    match /users/{id} {
+      allow read: if request.auth != null;
+    }
+    """
+    findings = FirebaseRuleAnalyzer().analyze(rules)
+
+    vuln_types = [finding["vuln_type"] for finding in findings]
+    assert "AuthButNoOwner" in vuln_types
+
+
+def test_owner_check_or_true_is_open_access():
+    rules = """
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId || true;
+    }
+    """
+    findings = FirebaseRuleAnalyzer().analyze(rules)
+
+    vuln_types = [finding["vuln_type"] for finding in findings]
+    assert "OpenAccess" in vuln_types
+
+
+def test_negated_owner_check_is_not_treated_as_safe():
+    rules = """
+    match /users/{userId} {
+      allow read: if !(request.auth.uid == userId);
+    }
+    """
+    findings = FirebaseRuleAnalyzer().analyze(rules)
+
+    assert findings != []
+
+
+def test_request_data_presence_is_not_write_validation():
+    rules = """
+    match /posts/{postId} {
+      allow write: if request.auth != null
+                   && request.resource.data != null;
+    }
+    """
+    findings = FirebaseRuleAnalyzer().analyze(rules)
+
+    vuln_types = [finding["vuln_type"] for finding in findings]
+    assert "WriteWithoutValidation" in vuln_types
    
