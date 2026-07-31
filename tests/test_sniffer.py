@@ -77,9 +77,7 @@ def test_detects_hardcoded_password():
     findings = scan_file(BAD_CONFIG)
     rules_found = [f["rule"] for f in findings]
 
-    assert "Hardcoded Password" in rules_found, (
-        "Should detect hardcoded password"
-    )
+    assert "Hardcoded Password" in rules_found, "Should detect hardcoded password"
 
 
 def test_detects_database_url():
@@ -120,72 +118,66 @@ def test_detects_env_secret_key():
     findings = scan_config_file(ENV_FILE)
     rules_found = [f["rule"] for f in findings]
 
-    assert "Exposed ENV Secret" in rules_found, (
-        "Should detect exposed SECRET_KEY in .env"
-    )
+    assert (
+        "Exposed ENV Secret" in rules_found
+    ), "Should detect exposed SECRET_KEY in .env"
 
 
 def test_detects_env_password():
     findings = scan_config_file(ENV_FILE)
     rules_found = [f["rule"] for f in findings]
 
-    assert "Exposed Password in ENV" in rules_found, (
-        "Should detect exposed password in .env"
-    )
+    assert (
+        "Exposed Password in ENV" in rules_found
+    ), "Should detect exposed password in .env"
 
 
 def test_detects_docker_password():
     findings = scan_config_file(DOCKER_FILE)
     rules_found = [f["rule"] for f in findings]
 
-    assert "Docker Hardcoded Password" in rules_found, (
-        "Should detect hardcoded password in docker-compose"
-    )
+    assert (
+        "Docker Hardcoded Password" in rules_found
+    ), "Should detect hardcoded password in docker-compose"
 
 
 def test_detects_firebase_unrestricted_read():
     findings = scan_config_file(FIREBASE_FILE)
     rules_found = [f["rule"] for f in findings]
 
-    assert "Firebase: Unrestricted read access" in rules_found, (
-        "Should detect Firebase open read rule"
-    )
+    assert (
+        "Firebase: Unrestricted read access" in rules_found
+    ), "Should detect Firebase open read rule"
 
 
 def test_detects_firebase_unrestricted_write():
     findings = scan_config_file(FIREBASE_FILE)
     rules_found = [f["rule"] for f in findings]
 
-    assert "Firebase: Unrestricted write access" in rules_found, (
-        "Should detect Firebase open write rule"
-    )
+    assert (
+        "Firebase: Unrestricted write access" in rules_found
+    ), "Should detect Firebase open write rule"
 
 
 def test_firebase_detects_open_access():
     findings = scan_firebase_file(OPEN_ACCESS_RULES)
     vuln_types = [f["vuln_type"] for f in findings]
 
-    assert "OpenAccess" in vuln_types, (
-        "Should detect OpenAccess in open_access.rules"
-    )
+    assert "OpenAccess" in vuln_types, "Should detect OpenAccess in open_access.rules"
 
 
 def test_firebase_detects_auth_but_no_owner():
     findings = scan_firebase_file(AUTH_NO_OWNER_RULES)
     vuln_types = [f["vuln_type"] for f in findings]
 
-    assert "AuthButNoOwner" in vuln_types, (
-        "Should detect AuthButNoOwner pattern"
-    )
+    assert "AuthButNoOwner" in vuln_types, "Should detect AuthButNoOwner pattern"
 
 
 def test_firebase_detects_weak_uid_check():
     findings = scan_firebase_file(WEAK_UID_RULES)
     vuln_types = [f["vuln_type"] for f in findings]
 
-    assert "WeakUidCheck" in vuln_types, (
-        "Should detect WeakUidCheck pattern"
-    )
+    assert "WeakUidCheck" in vuln_types, "Should detect WeakUidCheck pattern"
 
 
 def test_firebase_clean_rules_no_findings():

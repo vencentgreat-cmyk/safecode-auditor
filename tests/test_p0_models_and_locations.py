@@ -12,9 +12,9 @@ def test_comment_stripping_preserves_length_and_newline_offsets():
     cleaned = strip_comments_preserve_offsets(source)
 
     assert len(cleaned) == len(source)
-    assert [
-        index for index, char in enumerate(cleaned) if char == "\n"
-    ] == [index for index, char in enumerate(source) if char == "\n"]
+    assert [index for index, char in enumerate(cleaned) if char == "\n"] == [
+        index for index, char in enumerate(source) if char == "\n"
+    ]
     assert '"https://example.test/path"' in cleaned
     assert "trailing comment" not in cleaned
     assert "block" not in cleaned
@@ -83,6 +83,8 @@ def test_all_four_firebase_rules_have_stable_ids():
         source = f"match /users/{{userId}} {{ {rule} }}"
         finding = FirebaseRuleAnalyzer().analyze(source)[0]
         assert finding.rule_id == expected
+
+
 def test_write_with_owner_check_but_no_data_validation_triggers_fire003():
     source = """
     match /users/{userId} {

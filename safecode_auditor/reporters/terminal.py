@@ -50,11 +50,7 @@ def print_firebase_finding(i, finding):
 
 
 def print_summary(secret_findings, config_findings, firebase_findings):
-    all_findings = (
-        secret_findings
-        + config_findings
-        + firebase_findings
-    )
+    all_findings = secret_findings + config_findings + firebase_findings
     counts = {
         "CRITICAL": 0,
         "HIGH": 0,

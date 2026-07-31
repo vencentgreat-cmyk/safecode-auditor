@@ -24,7 +24,6 @@ from safecode_auditor.reporters.common import normalize_finding
 from safecode_auditor.reporters.json_reporter import build_json_report
 from safecode_auditor.reporters.sarif import build_sarif_report
 from safecode_auditor.reporters.terminal import (
-    SEVERITY_ICONS,
     print_banner,
     print_firebase_finding,
     print_secret_finding,
@@ -139,9 +138,7 @@ def _print_terminal(
                 finding["severity"] = "HIGH"
             print_secret_finding(index, finding)
 
-    print_section_header(
-        "MODULE 3 — FIREBASE ANALYZER (logic vulnerabilities)"
-    )
+    print_section_header("MODULE 3 — FIREBASE ANALYZER (logic vulnerabilities)")
     if not firebase_findings:
         print("\n  ✅ No Firebase logic vulnerabilities found.")
     else:

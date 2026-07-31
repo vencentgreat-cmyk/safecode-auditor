@@ -1,4 +1,6 @@
 from scanner.firebase_analyzer import FirebaseRuleAnalyzer
+
+
 def test_owner_check_detected_as_safe():
     rules = """
     match /users/{userId} {
@@ -9,6 +11,8 @@ def test_owner_check_detected_as_safe():
     findings = analyzer.analyze(rules)
 
     assert len(findings) == 0
+
+
 def test_owner_check_reverse_order():
     rules = """
     match /users/{userId} {
@@ -19,6 +23,8 @@ def test_owner_check_reverse_order():
     findings = analyzer.analyze(rules)
 
     assert len(findings) == 0
+
+
 def test_weak_uid_check():
     rules = """
     match /users/{userId} {
@@ -30,6 +36,8 @@ def test_weak_uid_check():
 
     vuln_types = [f["vuln_type"] for f in findings]
     assert "WeakUidCheck" in vuln_types
+
+
 def test_write_with_validation():
     rules = """
     match /posts/{postId} {
@@ -40,7 +48,9 @@ def test_write_with_validation():
     analyzer = FirebaseRuleAnalyzer()
     findings = analyzer.analyze(rules)
 
-    assert len(findings) == 0 
+    assert len(findings) == 0
+
+
 def test_invalid_expression_does_not_crash():
     rules = """
     match /users/{userId} {
@@ -51,6 +61,8 @@ def test_invalid_expression_does_not_crash():
     findings = analyzer.analyze(rules)
 
     assert isinstance(findings, list)
+
+
 def test_owner_check_via_resource_data_ownerid_is_safe():
     rules = """
     match /users/{userId} {
@@ -61,6 +73,8 @@ def test_owner_check_via_resource_data_ownerid_is_safe():
     findings = analyzer.analyze(rules)
 
     assert len(findings) == 0
+
+
 def test_owner_check_via_resource_data_ownerid_reverse_order_is_safe():
     rules = """
     match /users/{userId} {
@@ -71,6 +85,8 @@ def test_owner_check_via_resource_data_ownerid_reverse_order_is_safe():
     findings = analyzer.analyze(rules)
 
     assert len(findings) == 0
+
+
 def test_authenticated_read_on_generic_user_wildcard_requires_owner_check():
     rules = """
     match /users/{id} {
@@ -116,7 +132,9 @@ def test_request_data_presence_is_not_write_validation():
     findings = FirebaseRuleAnalyzer().analyze(rules)
 
     vuln_types = [finding["vuln_type"] for finding in findings]
-    assert "WriteWithoutValidation" in vuln_types   
+    assert "WriteWithoutValidation" in vuln_types
+
+
 def test_owner_check_or_auth_only_does_not_guarantee_ownership():
     rules = """
     match /users/{userId} {

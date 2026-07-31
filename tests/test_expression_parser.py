@@ -9,7 +9,9 @@ def test_parse_in_operator_member_access():
 
 
 def test_parse_in_operator_with_and():
-    ast = parse_expression("request.auth != null && request.auth.uid in resource.data.members")
+    ast = parse_expression(
+        "request.auth != null && request.auth.uid in resource.data.members"
+    )
 
     assert isinstance(ast, BinaryOp)
     assert ast.operator == "&&"

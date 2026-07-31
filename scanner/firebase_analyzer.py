@@ -95,7 +95,7 @@ class FirebaseRuleAnalyzer:
 
             i += 1
 
-        return content[start:i - 1], i
+        return content[start : i - 1], i
 
     def _parse_blocks(self, content, base_offset=0):
         """Recursively parse all match blocks in content."""
@@ -110,9 +110,7 @@ class FirebaseRuleAnalyzer:
 
             path = match.group(1)
             block_start = match.end()
-            block_content, block_end = self._extract_block(
-                content, block_start
-            )
+            block_content, block_end = self._extract_block(content, block_start)
             absolute_block_start = base_offset + block_start
 
             if "/databases/" in path and "/documents" in path:
@@ -180,19 +178,14 @@ class FirebaseRuleAnalyzer:
         )
 
         for match in pattern.finditer(clean):
-            operations = [
-                operation.strip()
-                for operation in match.group(1).split(",")
-            ]
+            operations = [operation.strip() for operation in match.group(1).split(",")]
             condition = match.group(2).strip()
 
             rules.append(
                 {
                     "operations": operations,
                     "condition": condition,
-                    "condition_ast": self._parse_condition_ast(
-                        condition
-                    ),
+                    "condition_ast": self._parse_condition_ast(condition),
                     "offset": base_offset + match.start(),
                 }
             )
@@ -200,14 +193,11 @@ class FirebaseRuleAnalyzer:
         bare = re.compile(r"allow\s+([\w,\s]+)\s*;")
 
         for match in bare.finditer(clean):
-            preceding = clean[max(0, match.start() - 5):match.end()]
+            preceding = clean[max(0, match.start() - 5) : match.end()]
             if ": if" in preceding:
                 continue
 
-            operations = [
-                operation.strip()
-                for operation in match.group(1).split(",")
-            ]
+            operations = [operation.strip() for operation in match.group(1).split(",")]
             write_operations = {
                 "write",
                 "create",
@@ -215,10 +205,7 @@ class FirebaseRuleAnalyzer:
                 "delete",
             }
 
-            if any(
-                operation in write_operations
-                for operation in operations
-            ):
+            if any(operation in write_operations for operation in operations):
                 rules.append(
                     {
                         "operations": operations,
@@ -277,10 +264,7 @@ class FirebaseRuleAnalyzer:
                 offset=offset,
                 line=line,
                 column=column,
-                ast_parsed=(
-                    condition is None
-                    or condition_ast is not None
-                ),
+                ast_parsed=(condition is None or condition_ast is not None),
                 signals=signals,
             )
 
@@ -331,25 +315,15 @@ class FirebaseRuleAnalyzer:
 
         if condition_ast is not None:
             return {
-                "literal_true": self._is_unconditionally_true(
-                    condition_ast
-                ),
+                "literal_true": self._is_unconditionally_true(condition_ast),
                 "has_auth": self._has_auth_check(condition_ast),
                 "has_owner": self._has_owner_check(
                     condition_ast,
                     wildcards,
                 ),
-                "has_weak_uid": self._has_weak_uid_check(
-                    condition_ast
-                ),
-                "has_validation": self._has_write_validation(
-                    condition_ast
-                ),
-                "has_custom_function": (
-                    self._has_custom_function_call(
-                        condition_ast
-                    )
-                ),
+                "has_weak_uid": self._has_weak_uid_check(condition_ast),
+                "has_validation": self._has_write_validation(condition_ast),
+                "has_custom_function": (self._has_custom_function_call(condition_ast)),
                 "is_user_path": is_user_path,
             }
 
@@ -372,9 +346,7 @@ class FirebaseRuleAnalyzer:
             "literal_true": compact == "true",
             "has_auth": "request.auth" in compact,
             "has_owner": has_owner,
-            "has_weak_uid": (
-                "request.auth.uid!=null" in compact
-            ),
+            "has_weak_uid": ("request.auth.uid!=null" in compact),
             "has_validation": has_validation,
             "has_custom_function": bool(
                 re.search(
@@ -395,16 +367,14 @@ class FirebaseRuleAnalyzer:
 
         if isinstance(node, BinaryOp):
             if node.operator == "||":
-                return (
-                    self._is_unconditionally_true(node.left)
-                    or self._is_unconditionally_true(node.right)
-                )
+                return self._is_unconditionally_true(
+                    node.left
+                ) or self._is_unconditionally_true(node.right)
 
             if node.operator == "&&":
-                return (
-                    self._is_unconditionally_true(node.left)
-                    and self._is_unconditionally_true(node.right)
-                )
+                return self._is_unconditionally_true(
+                    node.left
+                ) and self._is_unconditionally_true(node.right)
 
         return False
 
@@ -418,16 +388,14 @@ class FirebaseRuleAnalyzer:
 
         if isinstance(node, BinaryOp):
             if node.operator == "&&":
-                return (
-                    self._is_unconditionally_false(node.left)
-                    or self._is_unconditionally_false(node.right)
-                )
+                return self._is_unconditionally_false(
+                    node.left
+                ) or self._is_unconditionally_false(node.right)
 
             if node.operator == "||":
-                return (
-                    self._is_unconditionally_false(node.left)
-                    and self._is_unconditionally_false(node.right)
-                )
+                return self._is_unconditionally_false(
+                    node.left
+                ) and self._is_unconditionally_false(node.right)
 
         return False
 
@@ -450,27 +418,21 @@ class FirebaseRuleAnalyzer:
 
         if isinstance(node, BinaryOp):
             if node.operator == "&&":
-                return (
-                    self._condition_guarantees(
-                        node.left,
-                        predicate,
-                    )
-                    or self._condition_guarantees(
-                        node.right,
-                        predicate,
-                    )
+                return self._condition_guarantees(
+                    node.left,
+                    predicate,
+                ) or self._condition_guarantees(
+                    node.right,
+                    predicate,
                 )
 
             if node.operator == "||":
-                return (
-                    self._condition_guarantees(
-                        node.left,
-                        predicate,
-                    )
-                    and self._condition_guarantees(
-                        node.right,
-                        predicate,
-                    )
+                return self._condition_guarantees(
+                    node.left,
+                    predicate,
+                ) and self._condition_guarantees(
+                    node.right,
+                    predicate,
                 )
 
         if predicate(node):
@@ -521,6 +483,7 @@ class FirebaseRuleAnalyzer:
             node,
             is_validation,
         )
+
     def _has_auth_check(self, node):
         """Check if the AST contains an authentication check."""
         for current in self._walk(node):
@@ -550,19 +513,14 @@ class FirebaseRuleAnalyzer:
                     ["request", "auth", "uid"],
                 )
 
-                if (
-                    left_is_uid
-                    and isinstance(current.right, Identifier)
-                ):
+                if left_is_uid and isinstance(current.right, Identifier):
                     return True
 
-                if (
-                    right_is_uid
-                    and isinstance(current.left, Identifier)
-                ):
+                if right_is_uid and isinstance(current.left, Identifier):
                     return True
 
         return False
+
     def _has_owner_check(self, node, wildcards):
         """
         Return whether every successful logical branch guarantees
@@ -570,10 +528,7 @@ class FirebaseRuleAnalyzer:
         """
 
         def is_owner_check(current):
-            if (
-                not isinstance(current, BinaryOp)
-                or current.operator != "=="
-            ):
+            if not isinstance(current, BinaryOp) or current.operator != "==":
                 return False
 
             return (
@@ -601,13 +556,11 @@ class FirebaseRuleAnalyzer:
             node,
             is_owner_check,
         )
+
     def _has_weak_uid_check(self, node):
         """Check if the AST contains a weak UID check."""
         for current in self._walk(node):
-            if (
-                isinstance(current, BinaryOp)
-                and current.operator in {"==", "!="}
-            ):
+            if isinstance(current, BinaryOp) and current.operator in {"==", "!="}:
                 if self._is_uid_null_pair(
                     current.left,
                     current.right,
@@ -620,12 +573,9 @@ class FirebaseRuleAnalyzer:
                 ):
                     return True
 
-            if (
-                isinstance(current, UnaryOp)
-                and self._node_has_path(
-                    current.operand,
-                    ["request", "auth", "uid"],
-                )
+            if isinstance(current, UnaryOp) and self._node_has_path(
+                current.operand,
+                ["request", "auth", "uid"],
             ):
                 return True
 
@@ -637,9 +587,7 @@ class FirebaseRuleAnalyzer:
             if not isinstance(current, Call):
                 continue
 
-            root_name = self._root_identifier_name(
-                current.callee
-            )
+            root_name = self._root_identifier_name(current.callee)
 
             if root_name not in {"request", "resource"}:
                 return True
@@ -665,10 +613,7 @@ class FirebaseRuleAnalyzer:
         ):
             return False
 
-        return (
-            isinstance(right, Identifier)
-            and right.name in set(wildcards)
-        )
+        return isinstance(right, Identifier) and right.name in set(wildcards)
 
     def _is_uid_resource_owner_field_pair(
         self,
@@ -736,10 +681,7 @@ class FirebaseRuleAnalyzer:
     def _node_has_prefix(self, node, path_prefix):
         """Check if the node path starts with the given prefix."""
         path = self._node_path(node)
-        return (
-            path is not None
-            and path[:len(path_prefix)] == path_prefix
-        )
+        return path is not None and path[: len(path_prefix)] == path_prefix
 
     def _node_path(self, node):
         """Extract the path of a node as a list of strings."""
@@ -907,13 +849,8 @@ def scan_firebase_directory(directory):
         )
 
         for filename in sorted(files):
-            if (
-                filename.lower() in target_names
-                or filename.endswith(".rules")
-            ):
+            if filename.lower() in target_names or filename.endswith(".rules"):
                 filepath = os.path.join(root, filename)
-                findings.extend(
-                    scan_firebase_file(filepath)
-                )
+                findings.extend(scan_firebase_file(filepath))
 
     return findings
