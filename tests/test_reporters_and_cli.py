@@ -5,6 +5,7 @@ from safecode_auditor.baseline import load_baseline
 from safecode_auditor.reporters.json_reporter import build_json_report
 from safecode_auditor.reporters.sarif import build_sarif_report
 from scanner.firebase_analyzer import FirebaseRuleAnalyzer
+from safecode_auditor import __version__
 
 
 def _finding(filepath="firestore.rules"):
@@ -34,6 +35,10 @@ def test_sarif_report_contains_rule_and_physical_location():
     physical = result["locations"][0]["physicalLocation"]
     assert physical["artifactLocation"]["uri"] == "app/firestore.rules"
     assert physical["region"]["startLine"] == 1
+def test_sarif_report_uses_package_version():
+    report = build_sarif_report([])
+
+    assert report["runs"][0]["tool"]["driver"]["version"] == __version__
 
 
 def test_cli_scans_single_rules_file_as_json(tmp_path, capsys):
