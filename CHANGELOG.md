@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.1 — 2026-07-30
+
+### Added
+
+- Detection for Firestore writes with no detected data validation.
+- Sensitive-value redaction in report output.
+- Python 3.12 compatibility metadata.
+
+### Changed
+
+- Improved terminal and structured report handling.
+- Removed tracked Python cache files from the repository.
+- Updated the package version to 0.2.1.
+
+### Validation
+
+- 50 automated tests pass.
+
 ## 0.2.0 — 2026-07-30
 
 ### Added
