@@ -8,11 +8,6 @@ analyzer parses rule conditions into an AST, reports exact source locations,
 and emits JSON or SARIF for CI and GitHub Code Scanning.
 
 ## What it detects
-## Real-World Validation
-
-SafeCode Auditor was validated against Firebase Realtime Database rules from an existing Android application. It detected a real HIGH-severity unrestricted-read configuration and correctly enforced the configured threshold with exit code `2`.
-
-[Read the Firebase Realtime Database validation case study](docs/case-studies/real-world-realtime-database-validation.md)
 
 | Rule ID | Severity | Finding |
 |---|---:|---|
@@ -90,6 +85,15 @@ safecode . --ignore-rule FIRE001
 `--ignore-rule` can be repeated. Prefer a baseline for existing technical debt;
 use rule suppression only when a rule is intentionally irrelevant to the
 project.
+
+## Real-world validation
+
+SafeCode Auditor was validated against Firebase Realtime Database rules from
+an existing Android application. It detected a real `HIGH`-severity
+unrestricted-read configuration and correctly enforced the configured
+threshold with exit code `2`.
+
+[Read the Firebase Realtime Database validation case study](docs/case-studies/real-world-realtime-database-validation.md)
 
 ## GitHub Pull Request integration
 
@@ -193,6 +197,9 @@ baseline behavior.
 - [x] Single-file and directory scanning
 - [x] Severity thresholds, baseline, and rule suppression
 - [x] Composite GitHub Action
+- [x] Accurate source locations for Realtime Database findings
+- [ ] Realtime Database permission inheritance analysis
+- [ ] Realtime Database write validation analysis
 - [ ] Coarse before/after permission diff
 - [ ] Firebase Emulator verification for high-risk findings
 - [ ] Semantic condition implication
