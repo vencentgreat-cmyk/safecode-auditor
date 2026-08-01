@@ -8,6 +8,11 @@ analyzer parses rule conditions into an AST, reports exact source locations,
 and emits JSON or SARIF for CI and GitHub Code Scanning.
 
 ## What it detects
+## Real-World Validation
+
+SafeCode Auditor was validated against Firebase Realtime Database rules from an existing Android application. It detected a real HIGH-severity unrestricted-read configuration and correctly enforced the configured threshold with exit code `2`.
+
+[Read the Firebase Realtime Database validation case study](docs/case-studies/real-world-realtime-database-validation.md)
 
 | Rule ID | Severity | Finding |
 |---|---:|---|
