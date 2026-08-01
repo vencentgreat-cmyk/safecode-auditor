@@ -162,14 +162,21 @@ _FIREBASE_DANGEROUS_KEY_RULES = {
 def _scan_firebase_rules(filepath, content):
     """Return findings for dangerous Firebase Rules keys with source positions.
 
-    Uses the JSON locator to emit one finding per occurrence of a
-    dangerous key/value pair, each carrying accurate ``line`` and
-    ``column`` numbers. Falls back to the legacy whole-file regex match
-    when the input is not well-formed JSON, so that malformed but
-    still-suspicious rules files continue to be flagged (with ``line``
-    reported as ``"N/A"``).
+    Runs two passes over the file:
+
+    1. The whole-file dangerous-key scan (``.read: "true"`` etc.), which
+       relies on the JSON locator for accurate positions.
+    2. The permission-inheritance analysis (:mod:`scanner.rtdb_inheritance`),
+       which flags descendant rules made ineffective by a permissive
+       ancestor.
+
+    Falls back to the legacy whole-file regex match when the input is
+    not well-formed JSON, so that malformed but still-suspicious rules
+    files continue to be flagged (with ``line`` reported as ``"N/A"``).
     """
     from scanner.json_locator import JsonScanError, scan_json_string_values
+    from scanner.rtdb_inheritance import analyze_inheritance
+    from scanner.rtdb_tree import build_rtdb_tree
 
     findings = []
     try:
@@ -177,6 +184,7 @@ def _scan_firebase_rules(filepath, content):
     except JsonScanError:
         return _scan_firebase_rules_legacy(filepath, content)
 
+    # Pass 1: dangerous keys with permissive constant values.
     for entry in entries:
         if entry.value != "true":
             continue
@@ -194,7 +202,48 @@ def _scan_firebase_rules(filepath, content):
                 "fix": fix,
             }
         )
+
+    # Pass 2: permission inheritance.
+    tree = build_rtdb_tree(entries)
+    for inheritance in analyze_inheritance(tree):
+        findings.append(_inheritance_to_finding(filepath, inheritance))
+
     return findings
+
+
+def _inheritance_to_finding(filepath, inheritance):
+    """Convert an ``InheritanceFinding`` into the config_checker dict shape."""
+    child = _format_path(inheritance.child_path) or "the rules root"
+    ancestor = _format_path(inheritance.ancestor_path) or "the rules root"
+    kind = inheritance.kind
+    child_line = inheritance.child_expr.line
+    ancestor_line = inheritance.ancestor_expr.line
+    ancestor_expr_text = inheritance.ancestor_expr.expression.strip()
+
+    content = (
+        f"'.{kind}' at {child} is overridden by a permissive '.{kind}' at "
+        f"{ancestor} (line {ancestor_line}): the ancestor "
+        f"'{ancestor_expr_text}' already grants access, so the child rule "
+        f"cannot restrict it."
+    )
+    fix = (
+        f"Tighten the ancestor '.{kind}' rule at line {ancestor_line} so "
+        f"the child rule at line {child_line} can actually enforce "
+        f"access control."
+    )
+    return {
+        "file": filepath,
+        "line": child_line,
+        "column": inheritance.child_expr.column,
+        "rule": "Firebase: Overridden child rule under permissive ancestor",
+        "content": content,
+        "fix": fix,
+    }
+
+
+def _format_path(path):
+    """Render a tuple JSON path as a human-readable slash string."""
+    return "/".join(path)
 
 
 def _scan_firebase_rules_legacy(filepath, content):
