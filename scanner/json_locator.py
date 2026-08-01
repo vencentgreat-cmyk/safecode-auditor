@@ -9,6 +9,16 @@ library.
 The output is designed to feed configuration-file security checks that
 need to point at the exact location of a dangerous key/value pair, e.g.
 ``.read: "true"`` in ``database.rules.json``.
+
+Two public entry points are provided:
+
+* :func:`scan_json_string_values` returns only string leaves. This is
+  the original API and its behavior is preserved unchanged.
+* :func:`scan_json_leaf_values` additionally emits boolean and null
+  leaves as :class:`JsonPrimitiveValue`. Firebase Realtime Database
+  rules commonly use bare booleans (``.read: true``) instead of the
+  string form, and this second entry point lets downstream analysis
+  see both without a second parse.
 """
 
 from __future__ import annotations
@@ -40,6 +50,33 @@ class JsonStringValue:
     column: int
 
 
+@dataclass(frozen=True)
+class JsonPrimitiveValue:
+    """A boolean- or null-valued leaf in a JSON document, with source location.
+
+    Firebase Realtime Database rules commonly use bare boolean literals
+    (``".read": true``) instead of the equivalent string form
+    (``".read": "true"``). :class:`JsonStringValue` covers the second
+    form; this class covers the first, together with ``false`` and
+    ``null``, so callers can reason about both without a second parse.
+
+    ``value`` is the raw JSON literal as text — ``"true"``, ``"false"``,
+    or ``"null"`` — not a Python bool. Keeping it as text lets the same
+    downstream code path treat ``".read": "true"`` (string) and
+    ``".read": true`` (bare) uniformly.
+
+    ``line`` and ``column`` follow the same 1-based convention as
+    :class:`JsonStringValue`: they point at the opening quote of the
+    *key*.
+    """
+
+    path: tuple
+    key: str
+    value: str
+    line: int
+    column: int
+
+
 def scan_json_string_values(text: str) -> list[JsonStringValue]:
     """Return every string-valued leaf reachable from the root value.
 
@@ -52,21 +89,47 @@ def scan_json_string_values(text: str) -> list[JsonStringValue]:
     data after the root value.
     """
 
-    scanner = _Scanner(text)
+    scanner = _Scanner(text, include_primitives=False)
+    scanner.run()
+    return scanner.results
+
+
+def scan_json_leaf_values(text: str) -> list:
+    """Return every string, boolean, or null leaf reachable from the root.
+
+    Same walking rules as :func:`scan_json_string_values`, but also
+    emits :class:`JsonPrimitiveValue` entries for ``true``, ``false``,
+    and ``null``. Numbers are still skipped: current callers only
+    reason about permission-carrying values.
+
+    The returned list preserves discovery order and may mix
+    :class:`JsonStringValue` and :class:`JsonPrimitiveValue` instances.
+    """
+
+    scanner = _Scanner(text, include_primitives=True)
     scanner.run()
     return scanner.results
 
 
 class _Scanner:
-    __slots__ = ("text", "n", "pos", "line", "col", "results")
+    __slots__ = (
+        "text",
+        "n",
+        "pos",
+        "line",
+        "col",
+        "results",
+        "include_primitives",
+    )
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, include_primitives: bool = False) -> None:
         self.text = text
         self.n = len(text)
         self.pos = 0
         self.line = 1
         self.col = 1
-        self.results: list[JsonStringValue] = []
+        self.results: list = []
+        self.include_primitives = include_primitives
 
     def run(self) -> None:
         self._skip_ws()
@@ -116,6 +179,21 @@ class _Scanner:
 
     def _starts_with(self, literal: str) -> bool:
         return self.text.startswith(literal, self.pos)
+
+    def _peek_primitive_literal(self) -> str | None:
+        """Return ``"true"``, ``"false"``, or ``"null"`` if one starts here.
+
+        The literal must be terminated by a JSON structural character
+        (``,``, ``]``, ``}``, or whitespace) or end-of-input. Otherwise
+        an identifier like ``trueish`` would be misparsed as the boolean
+        ``true`` followed by garbage.
+        """
+        for literal in ("true", "false", "null"):
+            if self._starts_with(literal):
+                end = self.pos + len(literal)
+                if end == self.n or self.text[end] in ",]} \t\n\r":
+                    return literal
+        return None
 
     # ---- value dispatch --------------------------------------------
 
@@ -178,6 +256,21 @@ class _Scanner:
                         column=key_col,
                     )
                 )
+            elif self.include_primitives:
+                literal = self._peek_primitive_literal()
+                if literal is not None:
+                    self.results.append(
+                        JsonPrimitiveValue(
+                            path=child_path,
+                            key=key,
+                            value=literal,
+                            line=key_line,
+                            column=key_col,
+                        )
+                    )
+                    self._advance(len(literal))
+                else:
+                    self._parse_value(child_path)
             else:
                 self._parse_value(child_path)
             self._skip_ws()
