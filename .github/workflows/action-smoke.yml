@@ -1,0 +1,55 @@
+name: Action smoke test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  clean-target:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run action on clean fixture
+        uses: ./
+        with:
+          path: test_targets/clean
+          fail-on: low
+          upload-sarif: "false"
+
+  vulnerable-target:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run action on vulnerable fixtures
+        id: scan
+        continue-on-error: true
+        uses: ./
+        with:
+          path: test_targets
+          fail-on: high
+          upload-sarif: "false"
+      - name: Assert action failed as expected
+        shell: bash
+        run: |
+          echo "outcome=${{ steps.scan.outcome }}"
+          echo "scan-exit-code=${{ steps.scan.outputs.scan-exit-code }}"
+          if [[ "${{ steps.scan.outputs.scan-exit-code }}" != "2" ]]; then
+            echo "::error::Expected scan-exit-code=2 on vulnerable fixture, got '${{ steps.scan.outputs.scan-exit-code }}'"
+            exit 1
+          fi
+          if [[ "${{ steps.scan.outcome }}" != "failure" ]]; then
+            echo "::error::Expected scan step outcome=failure, got '${{ steps.scan.outcome }}'"
+            exit 1
+          fi
+          echo "Smoke test passed: action correctly failed on vulnerable fixture with exit code 2."
