@@ -174,13 +174,13 @@ def _scan_firebase_rules(filepath, content):
     not well-formed JSON, so that malformed but still-suspicious rules
     files continue to be flagged (with ``line`` reported as ``"N/A"``).
     """
-    from scanner.json_locator import JsonScanError, scan_json_string_values
+    from scanner.json_locator import JsonScanError, scan_json_leaf_values
     from scanner.rtdb_inheritance import analyze_inheritance
     from scanner.rtdb_tree import build_rtdb_tree
 
     findings = []
     try:
-        entries = scan_json_string_values(content)
+        entries = scan_json_leaf_values(content)
     except JsonScanError:
         return _scan_firebase_rules_legacy(filepath, content)
 
