@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
-from safecode_auditor import __version__
-from .common import normalize_finding, sort_key
+from typing import Any
 
+from safecode_auditor import __version__
+
+from .common import normalize_finding, sort_key
 
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
 
@@ -72,9 +74,7 @@ def build_sarif_report(findings: Iterable[Any]) -> dict[str, Any]:
                 "locations": [
                     {
                         "physicalLocation": {
-                            "artifactLocation": {
-                                "uri": _artifact_uri(location["file"])
-                            },
+                            "artifactLocation": {"uri": _artifact_uri(location["file"])},
                             "region": region,
                         }
                     }

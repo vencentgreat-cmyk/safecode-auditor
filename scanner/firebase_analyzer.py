@@ -41,10 +41,7 @@ class MatchBlock:
         self.offset = offset
 
     def __repr__(self):
-        return (
-            f"MatchBlock(path={self.path}, "
-            f"wildcards={self.wildcards}, rules={self.rules})"
-        )
+        return f"MatchBlock(path={self.path}, " f"wildcards={self.wildcards}, rules={self.rules})"
 
 
 class FirebaseRuleAnalyzer:
@@ -330,8 +327,7 @@ class FirebaseRuleAnalyzer:
         compact = re.sub(r"\s+", "", condition)
 
         has_owner = any(
-            f"request.auth.uid=={wildcard}" in compact
-            or f"{wildcard}==request.auth.uid" in compact
+            f"request.auth.uid=={wildcard}" in compact or f"{wildcard}==request.auth.uid" in compact
             for wildcard in wildcards
         )
 
@@ -367,14 +363,14 @@ class FirebaseRuleAnalyzer:
 
         if isinstance(node, BinaryOp):
             if node.operator == "||":
-                return self._is_unconditionally_true(
-                    node.left
-                ) or self._is_unconditionally_true(node.right)
+                return self._is_unconditionally_true(node.left) or self._is_unconditionally_true(
+                    node.right
+                )
 
             if node.operator == "&&":
-                return self._is_unconditionally_true(
-                    node.left
-                ) and self._is_unconditionally_true(node.right)
+                return self._is_unconditionally_true(node.left) and self._is_unconditionally_true(
+                    node.right
+                )
 
         return False
 
@@ -388,14 +384,14 @@ class FirebaseRuleAnalyzer:
 
         if isinstance(node, BinaryOp):
             if node.operator == "&&":
-                return self._is_unconditionally_false(
-                    node.left
-                ) or self._is_unconditionally_false(node.right)
+                return self._is_unconditionally_false(node.left) or self._is_unconditionally_false(
+                    node.right
+                )
 
             if node.operator == "||":
-                return self._is_unconditionally_false(
-                    node.left
-                ) and self._is_unconditionally_false(node.right)
+                return self._is_unconditionally_false(node.left) and self._is_unconditionally_false(
+                    node.right
+                )
 
         return False
 
@@ -812,7 +808,6 @@ def scan_firebase_file(filepath):
     try:
         with open(
             filepath,
-            "r",
             encoding="utf-8",
             errors="ignore",
         ) as file:

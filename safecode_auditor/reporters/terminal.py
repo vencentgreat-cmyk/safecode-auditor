@@ -2,7 +2,6 @@
 
 from .common import normalize_finding
 
-
 SEVERITY_ICONS = {
     "CRITICAL": "🔴 CRITICAL",
     "HIGH": "🟠 HIGH    ",

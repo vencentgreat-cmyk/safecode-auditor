@@ -1,5 +1,5 @@
-import re
 import os
+import re
 
 # Rule library: (rule_name, regex_pattern, fix_suggestion)
 RULES = [
@@ -46,7 +46,7 @@ def scan_file(filepath):
     findings = []
 
     try:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
     except Exception:
         return findings
@@ -77,9 +77,7 @@ def scan_directory(directory):
 
     for root, dirs, files in os.walk(directory):
         # Skip directories that don't need scanning
-        dirs[:] = sorted(
-            d for d in dirs if d not in ["node_modules", ".git", "__pycache__"]
-        )
+        dirs[:] = sorted(d for d in dirs if d not in ["node_modules", ".git", "__pycache__"])
 
         for filename in sorted(files):
             if filename.endswith(extensions):

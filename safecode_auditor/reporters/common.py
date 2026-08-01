@@ -7,7 +7,6 @@ from typing import Any
 
 from safecode_auditor.core.models import Finding
 
-
 SECRET_RULE_IDS = {
     "OpenAI API Key": "SEC001",
     "AWS Access Key": "SEC002",

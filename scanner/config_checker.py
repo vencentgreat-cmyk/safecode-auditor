@@ -1,5 +1,5 @@
-import re
 import os
+import re
 
 # Rules for configuration files: (rule_name, regex_pattern, fix_suggestion)
 CONFIG_RULES = [
@@ -61,7 +61,7 @@ def scan_config_file(filepath):
     filename = os.path.basename(filepath).lower()
 
     try:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
             content = "".join(lines)
     except Exception:
@@ -132,9 +132,7 @@ def scan_config_directory(directory):
     }
 
     for root, dirs, files in os.walk(directory):
-        dirs[:] = sorted(
-            d for d in dirs if d not in ["node_modules", ".git", "__pycache__"]
-        )
+        dirs[:] = sorted(d for d in dirs if d not in ["node_modules", ".git", "__pycache__"])
 
         for filename in sorted(files):
             if filename.lower() in target_files or filename.endswith(".env"):

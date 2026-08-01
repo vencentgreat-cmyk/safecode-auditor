@@ -1,11 +1,11 @@
 import json
-from safecode_auditor.reporters.terminal import print_secret_finding
-from safecode_auditor import cli
+
+from safecode_auditor import __version__, cli
 from safecode_auditor.baseline import load_baseline
 from safecode_auditor.reporters.json_reporter import build_json_report
 from safecode_auditor.reporters.sarif import build_sarif_report
+from safecode_auditor.reporters.terminal import print_secret_finding
 from scanner.firebase_analyzer import FirebaseRuleAnalyzer
-from safecode_auditor import __version__
 
 
 def _finding(filepath="firestore.rules"):

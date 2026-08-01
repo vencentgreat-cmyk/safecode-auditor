@@ -5,7 +5,6 @@ import pytest
 from safecode_auditor import cli
 from scanner.firebase_analyzer import FirebaseRuleAnalyzer
 
-
 OPEN_ACCESS_EXPLANATION = (
     "Using 'if true' allows anyone on the internet to read or write data "
     "without any credentials."

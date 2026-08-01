@@ -11,7 +11,6 @@ from scanner.config_checker import scan_config_file
 from scanner.firebase_analyzer import FirebaseRuleAnalyzer, scan_firebase_file
 from scanner.secret_sniffer import scan_file
 
-
 # Paths to test target files
 BAD_CONFIG = os.path.join(
     os.path.dirname(__file__),
@@ -118,18 +117,14 @@ def test_detects_env_secret_key():
     findings = scan_config_file(ENV_FILE)
     rules_found = [f["rule"] for f in findings]
 
-    assert (
-        "Exposed ENV Secret" in rules_found
-    ), "Should detect exposed SECRET_KEY in .env"
+    assert "Exposed ENV Secret" in rules_found, "Should detect exposed SECRET_KEY in .env"
 
 
 def test_detects_env_password():
     findings = scan_config_file(ENV_FILE)
     rules_found = [f["rule"] for f in findings]
 
-    assert (
-        "Exposed Password in ENV" in rules_found
-    ), "Should detect exposed password in .env"
+    assert "Exposed Password in ENV" in rules_found, "Should detect exposed password in .env"
 
 
 def test_detects_docker_password():

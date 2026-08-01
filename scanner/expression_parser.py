@@ -322,9 +322,7 @@ class ExpressionParser:
             self.index += 1
             return self._previous()
         token = self._peek()
-        raise ExpressionSyntaxError(
-            f"{message} Found {token.value!r} at position {token.position}"
-        )
+        raise ExpressionSyntaxError(f"{message} Found {token.value!r} at position {token.position}")
 
     def _peek(self):
         return self.tokens[self.index]
