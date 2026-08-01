@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from scanner.json_locator import JsonStringValue
+from scanner.json_locator import JsonPrimitiveValue, JsonStringValue
 
 # ── Data classes ────────────────────────────────────────────────────────────
 
@@ -68,7 +68,9 @@ class RtdbNode:
 _RULE_KEYS = frozenset({".read", ".write", ".validate"})
 
 
-def build_rtdb_tree(entries: Iterable[JsonStringValue]) -> RtdbNode:
+def build_rtdb_tree(
+    entries: Iterable[JsonStringValue | JsonPrimitiveValue],
+) -> RtdbNode:
     """Build a rules tree from JSON locator entries.
 
     Only entries whose path starts with ``"rules"`` participate; entries
