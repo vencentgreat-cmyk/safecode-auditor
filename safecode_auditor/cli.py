@@ -5,15 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import sys
-
-from scanner.config_checker import scan_config_directory, scan_config_file
-from scanner.firebase_analyzer import (
-    scan_firebase_directory,
-    scan_firebase_file,
-)
-from scanner.secret_sniffer import scan_directory, scan_file
+from pathlib import Path
 
 from safecode_auditor.baseline import (
     exclude_baseline,
@@ -24,13 +17,18 @@ from safecode_auditor.reporters.common import normalize_finding
 from safecode_auditor.reporters.json_reporter import build_json_report
 from safecode_auditor.reporters.sarif import build_sarif_report
 from safecode_auditor.reporters.terminal import (
-    SEVERITY_ICONS,
     print_banner,
     print_firebase_finding,
     print_secret_finding,
     print_section_header,
     print_summary,
 )
+from scanner.config_checker import scan_config_directory, scan_config_file
+from scanner.firebase_analyzer import (
+    scan_firebase_directory,
+    scan_firebase_file,
+)
+from scanner.secret_sniffer import scan_directory, scan_file
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -106,10 +104,7 @@ def _fails(findings, threshold: str) -> bool:
         return False
     ranks = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
     minimum = ranks[threshold.upper()]
-    return any(
-        ranks.get(normalize_finding(item)["severity"], 0) >= minimum
-        for item in findings
-    )
+    return any(ranks.get(normalize_finding(item)["severity"], 0) >= minimum for item in findings)
 
 
 def _print_terminal(
@@ -139,9 +134,7 @@ def _print_terminal(
                 finding["severity"] = "HIGH"
             print_secret_finding(index, finding)
 
-    print_section_header(
-        "MODULE 3 — FIREBASE ANALYZER (logic vulnerabilities)"
-    )
+    print_section_header("MODULE 3 — FIREBASE ANALYZER (logic vulnerabilities)")
     if not firebase_findings:
         print("\n  ✅ No Firebase logic vulnerabilities found.")
     else:
@@ -173,19 +166,13 @@ def main(argv: list[str] | None = None):
     ignored = {rule_id.upper() for rule_id in args.ignore_rule}
     if ignored:
         secret_findings = [
-            item
-            for item in secret_findings
-            if normalize_finding(item)["rule_id"] not in ignored
+            item for item in secret_findings if normalize_finding(item)["rule_id"] not in ignored
         ]
         config_findings = [
-            item
-            for item in config_findings
-            if normalize_finding(item)["rule_id"] not in ignored
+            item for item in config_findings if normalize_finding(item)["rule_id"] not in ignored
         ]
         firebase_findings = [
-            item
-            for item in firebase_findings
-            if normalize_finding(item)["rule_id"] not in ignored
+            item for item in firebase_findings if normalize_finding(item)["rule_id"] not in ignored
         ]
     all_original = secret_findings + config_findings + firebase_findings
 

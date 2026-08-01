@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+
 from safecode_auditor import __version__
+
 from .common import normalize_finding, sort_key
 
-
-SARIF_SCHEMA = (
-    "https://json.schemastore.org/sarif-2.1.0.json"
-)
+SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
 
 
 def _level(severity: str) -> str:
@@ -74,9 +74,7 @@ def build_sarif_report(findings: Iterable[Any]) -> dict[str, Any]:
                 "locations": [
                     {
                         "physicalLocation": {
-                            "artifactLocation": {
-                                "uri": _artifact_uri(location["file"])
-                            },
+                            "artifactLocation": {"uri": _artifact_uri(location["file"])},
                             "region": region,
                         }
                     }
@@ -97,13 +95,10 @@ def build_sarif_report(findings: Iterable[Any]) -> dict[str, Any]:
                     "driver": {
                         "name": "SafeCode Auditor",
                         "informationUri": (
-                            "https://github.com/vencentgreat-cmyk/"
-                            "safecode-auditor"
+                            "https://github.com/vencentgreat-cmyk/" "safecode-auditor"
                         ),
                         "version": __version__,
-                        "rules": [
-                            definitions[key] for key in sorted(definitions)
-                        ],
+                        "rules": [definitions[key] for key in sorted(definitions)],
                     }
                 },
                 "results": results,

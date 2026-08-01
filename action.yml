@@ -1,11 +1,9 @@
 name: SafeCode Auditor
 description: Scan Firebase Security Rules and application secrets in pull requests
 author: Yuxin Yang
-
 branding:
   icon: shield
   color: red
-
 inputs:
   path:
     description: File or directory to scan
@@ -27,12 +25,13 @@ inputs:
     description: Upload results to GitHub Code Scanning
     required: false
     default: "true"
-
 outputs:
   sarif-file:
     description: Path to the generated SARIF report
     value: ${{ steps.paths.outputs.sarif }}
-
+  scan-exit-code:
+    description: Raw exit code from safecode (0=clean, 1=config/exec error, 2=findings met threshold)
+    value: ${{ steps.scan.outputs.scan-exit-code }}
 runs:
   using: composite
   steps:
@@ -47,7 +46,6 @@ runs:
 
     - name: Scan repository
       id: scan
-      continue-on-error: true
       shell: bash
       env:
         SAFERULES_TARGET: ${{ inputs.path }}
@@ -56,6 +54,7 @@ runs:
         SAFERULES_IGNORE: ${{ inputs['ignore-rules'] }}
         SAFERULES_SARIF: ${{ steps.paths.outputs.sarif }}
       run: |
+        set +e
         args=(
           "$SAFERULES_TARGET"
           --format sarif
@@ -73,17 +72,37 @@ runs:
           fi
         done
         safecode "${args[@]}"
+        code=$?
+        echo "scan-exit-code=$code" >> "$GITHUB_OUTPUT"
+        case $code in
+          0)
+            echo "::notice::SafeCode Auditor: no findings at or above '${SAFERULES_FAIL_ON}'."
+            exit 0
+            ;;
+          2)
+            echo "::warning::SafeCode Auditor: findings met '${SAFERULES_FAIL_ON}' threshold."
+            exit 0
+            ;;
+          1)
+            echo "::error::SafeCode Auditor: configuration or execution error (invalid path, baseline, or output)."
+            exit 1
+            ;;
+          *)
+            echo "::error::SafeCode Auditor: unexpected exit code ${code}."
+            exit 1
+            ;;
+        esac
 
     - name: Upload SARIF
-      if: ${{ always() && inputs['upload-sarif'] == 'true' }}
+      if: ${{ always() && inputs['upload-sarif'] == 'true' && steps.scan.outputs.scan-exit-code != '1' }}
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ steps.paths.outputs.sarif }}
         category: saferules
 
     - name: Enforce severity threshold
-      if: ${{ steps.scan.outcome == 'failure' }}
+      if: ${{ steps.scan.outputs.scan-exit-code == '2' }}
       shell: bash
       run: |
-        echo "SafeCode Auditor found an issue at or above '${{ inputs['fail-on'] }}'."
-        exit 2
+        echo "SafeCode Auditor found a finding at or above '${{ inputs['fail-on'] }}'."
+        exit 1

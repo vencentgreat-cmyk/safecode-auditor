@@ -5,7 +5,6 @@ import pytest
 from safecode_auditor import cli
 from scanner.firebase_analyzer import FirebaseRuleAnalyzer
 
-
 OPEN_ACCESS_EXPLANATION = (
     "Using 'if true' allows anyone on the internet to read or write data "
     "without any credentials."
@@ -32,8 +31,7 @@ def test_open_access_finding_preserves_current_public_shape():
             "vuln_type": "OpenAccess",
             "severity": "CRITICAL",
             "description": (
-                "Collection is fully open to the public, no authentication "
-                "required."
+                "Collection is fully open to the public, no authentication " "required."
             ),
             "explanation": OPEN_ACCESS_EXPLANATION,
             "fix": (
@@ -130,9 +128,7 @@ def test_terminal_firebase_finding_format_is_preserved(capsys):
     )
 
 
-def test_cli_reports_firebase_finding_and_returns_success(
-    monkeypatch, capsys
-):
+def test_cli_reports_firebase_finding_and_returns_success(monkeypatch, capsys):
     finding = _analyze(
         """
         match /public/{docId} {
@@ -145,9 +141,7 @@ def test_cli_reports_firebase_finding_and_returns_success(
     monkeypatch.setattr(cli.os.path, "exists", lambda _path: True)
     monkeypatch.setattr(cli, "scan_directory", lambda _path: [])
     monkeypatch.setattr(cli, "scan_config_directory", lambda _path: [])
-    monkeypatch.setattr(
-        cli, "scan_firebase_directory", lambda _path: [finding]
-    )
+    monkeypatch.setattr(cli, "scan_firebase_directory", lambda _path: [finding])
 
     result = cli.main()
     output = capsys.readouterr().out

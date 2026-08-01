@@ -2,7 +2,6 @@
 
 from .common import normalize_finding
 
-
 SEVERITY_ICONS = {
     "CRITICAL": "🔴 CRITICAL",
     "HIGH": "🟠 HIGH    ",
@@ -50,11 +49,7 @@ def print_firebase_finding(i, finding):
 
 
 def print_summary(secret_findings, config_findings, firebase_findings):
-    all_findings = (
-        secret_findings
-        + config_findings
-        + firebase_findings
-    )
+    all_findings = secret_findings + config_findings + firebase_findings
     counts = {
         "CRITICAL": 0,
         "HIGH": 0,

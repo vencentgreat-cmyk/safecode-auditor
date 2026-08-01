@@ -92,7 +92,7 @@ def tokenize(expression):
             i += 1
             continue
 
-        two_char = expression[i:i + 2]
+        two_char = expression[i : i + 2]
         if two_char in MULTI_CHAR_TOKENS:
             tokens.append(Token(MULTI_CHAR_TOKENS[two_char], two_char, i))
             i += 2
@@ -118,9 +118,7 @@ def tokenize(expression):
             tokens.append(token)
             continue
 
-        raise ExpressionSyntaxError(
-            f"Unexpected character {char!r} at position {i}"
-        )
+        raise ExpressionSyntaxError(f"Unexpected character {char!r} at position {i}")
 
     tokens.append(Token("EOF", None, len(expression)))
     return tokens

@@ -1,11 +1,11 @@
 import json
-from safecode_auditor.reporters.terminal import print_secret_finding
-from safecode_auditor import cli
+
+from safecode_auditor import __version__, cli
 from safecode_auditor.baseline import load_baseline
 from safecode_auditor.reporters.json_reporter import build_json_report
 from safecode_auditor.reporters.sarif import build_sarif_report
+from safecode_auditor.reporters.terminal import print_secret_finding
 from scanner.firebase_analyzer import FirebaseRuleAnalyzer
-from safecode_auditor import __version__
 
 
 def _finding(filepath="firestore.rules"):
@@ -35,6 +35,8 @@ def test_sarif_report_contains_rule_and_physical_location():
     physical = result["locations"][0]["physicalLocation"]
     assert physical["artifactLocation"]["uri"] == "app/firestore.rules"
     assert physical["region"]["startLine"] == 1
+
+
 def test_sarif_report_uses_package_version():
     report = build_sarif_report([])
 
@@ -63,9 +65,7 @@ def test_fail_on_threshold_returns_two_for_matching_finding(tmp_path, capsys):
         encoding="utf-8",
     )
 
-    result = cli.main(
-        [str(rules_file), "--format", "json", "--fail-on", "high"]
-    )
+    result = cli.main([str(rules_file), "--format", "json", "--fail-on", "high"])
     capsys.readouterr()
 
     assert result == 2
@@ -126,6 +126,8 @@ def test_ignore_rule_suppresses_selected_rule(tmp_path, capsys):
     report = json.loads(capsys.readouterr().out)
 
     assert report["summary"]["total"] == 0
+
+
 def _secret_finding(secret):
     return {
         "file": "app.py",

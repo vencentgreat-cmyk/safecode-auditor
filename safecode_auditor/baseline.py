@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from safecode_auditor.reporters.common import normalize_finding
 
@@ -48,9 +49,7 @@ def write_baseline(path: str, findings: Iterable[Any]) -> None:
 def load_baseline(path: str) -> set[str]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     values = payload.get("fingerprints")
-    if not isinstance(values, list) or not all(
-        isinstance(value, str) for value in values
-    ):
+    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
         raise ValueError("baseline must contain a fingerprints string array")
     return set(values)
 
