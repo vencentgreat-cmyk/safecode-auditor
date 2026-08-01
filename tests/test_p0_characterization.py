@@ -58,6 +58,77 @@ def test_bare_write_rule_is_currently_open_access():
     assert finding["severity"] == "CRITICAL"
 
 
+def test_bare_read_rule_is_open_access():
+    """Bare ``allow read;`` is semantically ``if true`` -> FIRE001."""
+    source = """
+    match /public/{docId} {
+      allow read;
+    }
+    """
+    finding = _analyze(source)[0]
+    assert finding["vuln_type"] == "OpenAccess"
+    assert finding["operations"] == ["read"]
+    assert finding["condition"] is None
+    assert finding["severity"] == "CRITICAL"
+
+
+def test_bare_get_rule_is_open_access():
+    source = """
+    match /public/{docId} {
+      allow get;
+    }
+    """
+    finding = _analyze(source)[0]
+    assert finding["vuln_type"] == "OpenAccess"
+    assert finding["operations"] == ["get"]
+
+
+def test_bare_list_rule_is_open_access():
+    source = """
+    match /public/{docId} {
+      allow list;
+    }
+    """
+    finding = _analyze(source)[0]
+    assert finding["vuln_type"] == "OpenAccess"
+    assert finding["operations"] == ["list"]
+
+
+def test_bare_mixed_read_write_both_captured():
+    source = """
+    match /public/{docId} {
+      allow read, write;
+    }
+    """
+    finding = _analyze(source)[0]
+    assert finding["vuln_type"] == "OpenAccess"
+    assert finding["operations"] == ["read", "write"]
+    assert finding["condition"] is None
+
+
+def test_nested_bare_read_is_open_access():
+    source = """
+    match /public/{docId} {
+      match /nested/{id} {
+        allow get;
+      }
+    }
+    """
+    finding = _analyze(source)[0]
+    assert finding["vuln_type"] == "OpenAccess"
+    assert finding["path"] == "/nested/{id}"
+
+
+def test_auth_condition_does_not_trigger_open_access_on_read():
+    """``allow read: if request.auth != null;`` is not open access."""
+    source = """
+    match /public/{docId} {
+      allow read: if request.auth != null;
+    }
+    """
+    assert _analyze(source) == []
+
+
 def test_false_condition_does_not_report_open_access():
     source = """
     match /public/{docId} {

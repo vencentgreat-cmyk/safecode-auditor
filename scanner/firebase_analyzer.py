@@ -1,3 +1,4 @@
+import json
 import os
 import re
 
@@ -195,22 +196,15 @@ class FirebaseRuleAnalyzer:
                 continue
 
             operations = [operation.strip() for operation in match.group(1).split(",")]
-            write_operations = {
-                "write",
-                "create",
-                "update",
-                "delete",
-            }
 
-            if any(operation in write_operations for operation in operations):
-                rules.append(
-                    {
-                        "operations": operations,
-                        "condition": None,
-                        "condition_ast": None,
-                        "offset": base_offset + match.start(),
-                    }
-                )
+            rules.append(
+                {
+                    "operations": operations,
+                    "condition": None,
+                    "condition_ast": None,
+                    "offset": base_offset + match.start(),
+                }
+            )
 
         return rules
 
@@ -849,3 +843,66 @@ def scan_firebase_directory(directory):
                 findings.extend(scan_firebase_file(filepath))
 
     return findings
+
+
+def discover_from_firebase_json(project_dir: str) -> list[str]:
+    """Return the list of discovered rules file paths from firebase.json.
+
+    Supports the standard ``"database"`` and ``"firestore"`` keys
+    whose values are objects with a ``"rules"`` property pointing at a
+    relative path.  Returns an empty list when ``firebase.json`` does
+    not exist, is malformed, or contains no recognised rules paths.
+
+    Path containment is verified via ``os.path.realpath`` and
+    ``os.path.commonpath``, which correctly rejects sibling-prefix
+    attacks (``project`` vs ``project-escape``), ``..`` traversal,
+    absolute paths pointing outside the project, and symlink escapes.
+    """
+    config_path = os.path.join(project_dir, "firebase.json")
+    if not os.path.isfile(config_path):
+        return []
+
+    try:
+        with open(config_path, encoding="utf-8", errors="ignore") as fh:
+            payload = json.loads(fh.read())
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    if not isinstance(payload, dict):
+        return []
+
+    rules_files: list[str] = []
+    seen: set[str] = set()
+    real_project = os.path.realpath(project_dir)
+
+    for section_key in ("database", "firestore"):
+        section = payload.get(section_key)
+        if not isinstance(section, dict):
+            continue
+        rules_path = section.get("rules")
+        if not isinstance(rules_path, str) or not rules_path.strip():
+            continue
+        # Resolve relative to the firebase.json directory.
+        candidate = os.path.normpath(
+            os.path.join(project_dir, rules_path)
+        )
+        # Resolve to real path (follows symlinks) and check containment
+        # using common-path semantics, which correctly rejects sibling-
+        # prefix attacks (e.g. project vs project-escape), .. traversal,
+        # absolute paths outside the project, and symlink escapes.
+        try:
+            resolved = os.path.realpath(candidate)
+        except OSError:
+            continue
+        try:
+            common = os.path.commonpath([real_project, resolved])
+        except ValueError:
+            # Paths on different drives on Windows — reject.
+            continue
+        if common != real_project:
+            continue
+        if os.path.isfile(candidate) and candidate not in seen:
+            seen.add(candidate)
+            rules_files.append(candidate)
+
+    return rules_files
