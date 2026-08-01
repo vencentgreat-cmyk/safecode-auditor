@@ -102,17 +102,7 @@ def scan_config_file(filepath):
 
     # Scan Firebase rules
     elif "firebase" in filename or filename == "database.rules.json":
-        for pattern, rule_name, fix in FIREBASE_DANGER_PATTERNS:
-            if re.search(pattern, content):
-                findings.append(
-                    {
-                        "file": filepath,
-                        "line": "N/A",
-                        "rule": rule_name,
-                        "content": "Dangerous rule detected in Firebase config",
-                        "fix": fix,
-                    }
-                )
+        findings.extend(_scan_firebase_rules(filepath, content))
 
     return findings
 
@@ -141,3 +131,84 @@ def scan_config_directory(directory):
                 all_findings.extend(findings)
 
     return all_findings
+
+
+# ── Firebase rules helpers ──────────────────────────────────────────────────
+
+
+# Keys in Firebase Realtime Database rules whose value ``"true"`` grants
+# unrestricted access. Kept as a mapping so that a single lookup gives
+# both the rule name and the fix suggestion for a matched key.
+_FIREBASE_DANGEROUS_KEY_RULES = {
+    ".read": (
+        "Firebase: Unrestricted read access",
+        'Replace ".read": "true" with ".read": "auth != null" to require authentication',
+    ),
+    ".write": (
+        "Firebase: Unrestricted write access",
+        'Replace ".write": "true" with ".write": "auth != null" to require authentication',
+    ),
+    "read": (
+        "Firebase: Unrestricted read access",
+        'Replace "read": "true" with "read": "auth != null" to require authentication',
+    ),
+    "write": (
+        "Firebase: Unrestricted write access",
+        'Replace "write": "true" with "write": "auth != null" to require authentication',
+    ),
+}
+
+
+def _scan_firebase_rules(filepath, content):
+    """Return findings for dangerous Firebase Rules keys with source positions.
+
+    Uses the JSON locator to emit one finding per occurrence of a
+    dangerous key/value pair, each carrying accurate ``line`` and
+    ``column`` numbers. Falls back to the legacy whole-file regex match
+    when the input is not well-formed JSON, so that malformed but
+    still-suspicious rules files continue to be flagged (with ``line``
+    reported as ``"N/A"``).
+    """
+    from scanner.json_locator import JsonScanError, scan_json_string_values
+
+    findings = []
+    try:
+        entries = scan_json_string_values(content)
+    except JsonScanError:
+        return _scan_firebase_rules_legacy(filepath, content)
+
+    for entry in entries:
+        if entry.value != "true":
+            continue
+        rule = _FIREBASE_DANGEROUS_KEY_RULES.get(entry.key)
+        if rule is None:
+            continue
+        rule_name, fix = rule
+        findings.append(
+            {
+                "file": filepath,
+                "line": entry.line,
+                "column": entry.column,
+                "rule": rule_name,
+                "content": "Dangerous rule detected in Firebase config",
+                "fix": fix,
+            }
+        )
+    return findings
+
+
+def _scan_firebase_rules_legacy(filepath, content):
+    """Whole-file regex fallback for malformed JSON."""
+    findings = []
+    for pattern, rule_name, fix in FIREBASE_DANGER_PATTERNS:
+        if re.search(pattern, content):
+            findings.append(
+                {
+                    "file": filepath,
+                    "line": "N/A",
+                    "rule": rule_name,
+                    "content": "Dangerous rule detected in Firebase config",
+                    "fix": fix,
+                }
+            )
+    return findings

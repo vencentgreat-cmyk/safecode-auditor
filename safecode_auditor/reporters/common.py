@@ -73,6 +73,8 @@ def normalize_finding(finding: Finding | dict[str, Any]) -> dict[str, Any]:
 
     raw_line = finding.get("line", 1)
     line = raw_line if isinstance(raw_line, int) else 1
+    raw_column = finding.get("column", 1)
+    column = raw_column if isinstance(raw_column, int) else 1
     category = "secret" if rule_id.startswith("SEC") else "configuration"
     severity = str(finding.get("severity", "HIGH")).upper()
     safe_content = redact_finding_content(
@@ -92,7 +94,7 @@ def normalize_finding(finding: Finding | dict[str, Any]) -> dict[str, Any]:
         "location": {
             "file": str(finding.get("file", "")),
             "start_line": line,
-            "start_column": 1,
+            "start_column": column,
         },
         "path": None,
         "operations": [],
