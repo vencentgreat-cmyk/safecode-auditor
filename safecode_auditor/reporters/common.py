@@ -25,6 +25,7 @@ CONFIG_RULE_IDS = {
     "Docker Hardcoded Secret": "CFG005",
     "Firebase: Unrestricted read access": "CFG006",
     "Firebase: Unrestricted write access": "CFG007",
+    "Firebase: Overridden child rule under permissive ancestor": "CFG008",
 }
 
 SENSITIVE_RULE_IDS = {
