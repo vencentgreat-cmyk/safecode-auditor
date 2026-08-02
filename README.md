@@ -242,7 +242,7 @@ enforcement still works.
 ### Version Pinning
 
 - Use `@v0` for the latest stable release (auto-updating).
-- Pin to a specific tag like `@v0.2.2` for reproducible CI.
+- Pin to a specific tag like `@v0.3.0` for reproducible CI.
 
 ## Architecture
 
