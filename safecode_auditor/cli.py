@@ -9,10 +9,10 @@ import sys
 from pathlib import Path
 
 from safecode_auditor.baseline import (
-    exclude_baseline,
-    load_baseline,
+    load_baseline_matcher,
     write_baseline,
 )
+from safecode_auditor.explain import format_explain, get_rule, list_rule_ids
 from safecode_auditor.reporters.common import normalize_finding
 from safecode_auditor.reporters.json_reporter import build_json_report
 from safecode_auditor.reporters.sarif import build_sarif_report
@@ -25,6 +25,7 @@ from safecode_auditor.reporters.terminal import (
 )
 from scanner.config_checker import scan_config_directory, scan_config_file
 from scanner.firebase_analyzer import (
+    discover_from_firebase_json,
     scan_firebase_directory,
     scan_firebase_file,
 )
@@ -67,15 +68,30 @@ def _parser() -> argparse.ArgumentParser:
         metavar="RULE_ID",
         help="Ignore a rule ID; may be supplied more than once",
     )
+    parser.add_argument(
+        "--explain",
+        metavar="RULE_ID",
+        help="Show detailed explanation for a rule and exit",
+    )
+    parser.add_argument(
+        "--list-rules",
+        action="store_true",
+        help="List all supported rule IDs and exit",
+    )
     return parser
 
 
 def _scan(target: str):
     if os.path.isdir(target) or not os.path.isfile(target):
+        # --- directory scan (includes firebase.json discovery) ---
+        firebase_findings = scan_firebase_directory(target)
+        # Also discover and scan rules files referenced from firebase.json.
+        for discovered in discover_from_firebase_json(target):
+            firebase_findings.extend(scan_firebase_file(discovered))
         return (
             scan_directory(target),
             scan_config_directory(target),
-            scan_firebase_directory(target),
+            firebase_findings,
         )
 
     secret_findings = scan_file(target)
@@ -154,6 +170,26 @@ def main(argv: list[str] | None = None):
 
     args = _parser().parse_args(raw_args)
     target = args.target
+
+    # --list-rules / --explain: documentation only, no scan
+    if args.list_rules:
+        for rid in list_rule_ids():
+            rule = get_rule(rid)
+            if rule is not None:
+                print(f"{rid:8s} {rule.severity:10s} {rule.title}")
+        return None
+    if args.explain:
+        rule = get_rule(args.explain.upper())
+        if rule is None:
+            print(
+                f"Error: unknown rule ID '{args.explain}'."
+                f" Use --list-rules to see supported IDs.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        print(format_explain(rule))
+        return None
+
     if not os.path.exists(target):
         if args.output_format == "terminal":
             print_banner()
@@ -181,13 +217,13 @@ def main(argv: list[str] | None = None):
 
     if args.baseline:
         try:
-            known = load_baseline(args.baseline)
+            is_suppressed = load_baseline_matcher(args.baseline)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             print(f"Error: invalid baseline: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
-        secret_findings = exclude_baseline(secret_findings, known)
-        config_findings = exclude_baseline(config_findings, known)
-        firebase_findings = exclude_baseline(firebase_findings, known)
+        secret_findings = [f for f in secret_findings if not is_suppressed(f)]
+        config_findings = [f for f in config_findings if not is_suppressed(f)]
+        firebase_findings = [f for f in firebase_findings if not is_suppressed(f)]
 
     all_findings = secret_findings + config_findings + firebase_findings
     if args.output_format == "terminal":

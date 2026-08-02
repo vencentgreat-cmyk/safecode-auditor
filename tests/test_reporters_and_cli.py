@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from safecode_auditor import __version__, cli
 from safecode_auditor.baseline import load_baseline
 from safecode_auditor.reporters.json_reporter import build_json_report
@@ -22,6 +24,12 @@ def test_json_report_has_stable_versioned_shape():
     assert report["summary"]["total"] == 1
     assert report["findings"][0]["rule_id"] == "FIRE001"
     assert report["findings"][0]["location"]["start_line"] == 1
+
+
+def test_json_report_uses_package_version():
+    report = build_json_report([])
+
+    assert report["tool"]["version"] == __version__
 
 
 def test_sarif_report_contains_rule_and_physical_location():
@@ -165,3 +173,82 @@ def test_terminal_report_redacts_secret_source_content(capsys):
 
     assert secret not in output
     assert "[REDACTED" in output
+
+
+def test_list_rules_lists_all_supported_ids(capsys):
+    result = cli.main([".", "--list-rules"])
+    output = capsys.readouterr().out
+
+    assert result is None
+    assert "FIRE001" in output
+    assert "CFG008" in output
+    assert "SEC001" in output
+
+
+def test_explain_known_rule_prints_detail(capsys):
+    result = cli.main([".", "--explain", "fire001"])
+    output = capsys.readouterr().out
+
+    assert result is None
+    assert "FIRE001" in output
+    assert "Public access" in output
+    assert "CRITICAL" in output
+
+
+def test_explain_unknown_rule_exits_nonzero():
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main([".", "--explain", "NONEXISTENT"])
+
+    assert exc_info.value.code == 1
+
+
+def test_explain_does_not_require_valid_target(capsys, tmp_path):
+    result = cli.main(["/nonexistent/path", "--explain", "CFG008"])
+    output = capsys.readouterr().out
+
+    assert result is None
+    assert "CFG008" in output
+    assert "Permission Inheritance" in output
+
+
+def test_sarif_partial_fingerprints_no_collision():
+    """Two findings with different semantic identities must not collide."""
+    from safecode_auditor.core.models import Confidence, Finding, Fix, Location, Severity
+
+    f1 = Finding(
+        rule_id="FIRE001",
+        rule_name="OpenAccess",
+        title="Open",
+        severity=Severity.CRITICAL,
+        confidence=Confidence.HIGH,
+        description="Open.",
+        explanation="Open.",
+        location=Location(file="firestore.rules", start_line=3, start_column=1),
+        path="/a/{x}",
+        operations=("read",),
+        condition="true",
+        fix=Fix(description="Fix."),
+    )
+    f2 = Finding(
+        rule_id="FIRE001",
+        rule_name="OpenAccess",
+        title="Open",
+        severity=Severity.CRITICAL,
+        confidence=Confidence.HIGH,
+        description="Open.",
+        explanation="Open.",
+        location=Location(file="firestore.rules", start_line=3, start_column=1),
+        path="/b/{y}",
+        operations=("write",),
+        condition="true",
+        fix=Fix(description="Fix."),
+    )
+
+    report = build_sarif_report([f1, f2])
+    fps = [
+        r["partialFingerprints"]["primaryLocationLineHash"] for r in report["runs"][0]["results"]
+    ]
+    assert fps[0] != fps[1], (
+        "Partial fingerprints must distinguish findings with different "
+        "semantic identities even at the same file and line"
+    )

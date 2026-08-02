@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from safecode_auditor import __version__
+
 from .common import normalize_finding, sort_key
 
 
@@ -21,7 +23,7 @@ def build_json_report(findings: Iterable[Any]) -> dict[str, Any]:
         "schema_version": "1.0.0",
         "tool": {
             "name": "SafeCode Auditor",
-            "version": "0.2.0",
+            "version": __version__,
         },
         "summary": {
             "total": len(normalized),

@@ -3,27 +3,24 @@
 [![CI](https://github.com/vencentgreat-cmyk/safecode-auditor/actions/workflows/safecode-scan.yml/badge.svg)](https://github.com/vencentgreat-cmyk/safecode-auditor/actions/workflows/safecode-scan.yml)
 
 SafeCode Auditor is a PR-ready security scanner for Firebase Security Rules,
-hardcoded credentials, and unsafe application configuration. Its Firestore
-analyzer parses rule conditions into an AST, reports exact source locations,
-and emits JSON or SARIF for CI and GitHub Code Scanning.
+hardcoded credentials, and unsafe application configuration. It parses Firestore
+rule conditions into an AST, reports exact source locations, and emits JSON or
+SARIF for CI and GitHub Code Scanning. Realtime Database rules are analysed
+with a JSON source-locator that tracks accurate line and column positions.
 
-## What it detects
+## Supported Python Versions
 
-| Rule ID | Severity | Finding |
-|---|---:|---|
-| `FIRE001` | Critical | Public access through `if true` or a bare write rule |
-| `FIRE002` | High | Authentication without an ownership check |
-| `FIRE003` | High | Authenticated writes without data validation |
-| `FIRE004` | Medium | A UID existence check used as authorization |
-| `SEC001`–`SEC007` | High | API keys, tokens, passwords, and database credentials |
-| `CFG001`–`CFG007` | High | Unsafe `.env`, Docker, and Firebase configuration |
+Python 3.11 and later. No external dependencies beyond the standard library.
 
-When a Firestore expression cannot be parsed, heuristic findings are retained
-but explicitly marked as low confidence.
+## Install
 
-## Install and scan
+### From PyPI (recommended when available)
 
-Requires Python 3.11 or newer.
+```bash
+pip install safecode-auditor
+```
+
+### From source (always available)
 
 ```bash
 git clone https://github.com/vencentgreat-cmyk/safecode-auditor.git
@@ -31,74 +28,172 @@ cd safecode-auditor
 python -m pip install .
 ```
 
-Scan a directory or one rules file:
+## Quick Start
+
+### First scan — Firestore
 
 ```bash
-safecode .
 safecode firestore.rules
 ```
 
-The default terminal report remains suitable for local use. Machine-readable
-reports are deterministic and versioned:
+### First scan — Realtime Database
+
+```bash
+safecode database.rules.json
+```
+
+### Scan a whole directory
+
+```bash
+safecode .
+```
+
+The directory scanner finds `firestore.rules`, `database.rules.json`,
+`firebase.rules`, and any file ending in `.rules`. It also scans `.env` files,
+Docker Compose files, source files for secrets, and `firebase.json` for project
+configuration.
+
+## What It Detects
+
+### Firestore Rules (FIRE001–FIRE004)
+
+| Rule ID | Severity | Finding |
+| ------- | -------- | ------- |
+| FIRE001 | Critical | Public access: `if true`, bare `allow read;`, or bare `allow write;` |
+| FIRE002 | High     | Authentication without an ownership check on user-scoped paths |
+| FIRE003 | High     | Authenticated writes without data validation |
+| FIRE004 | Medium   | UID existence check (`!= null`) used as authorization |
+
+Bare `allow read;`, `allow get;`, `allow list;`, `allow write;`, `allow create;`,
+`allow update;`, and `allow delete;` (without an `if` clause) are all treated as
+unconditional access and reported as FIRE001.
+
+### Realtime Database Rules (CFG006–CFG008)
+
+| Rule ID | Severity | Finding |
+| ------- | -------- | ------- |
+| CFG006  | High     | Unrestricted read access (`.read: "true"` or `.read: true`) |
+| CFG007  | High     | Unrestricted write access (`.write: "true"` or `.write: true`) |
+| CFG008  | High     | Ineffective child rule: a stricter descendant is overridden by a permissive ancestor |
+
+CFG008 (permission inheritance) is the most interesting RTDB detector. Realtime
+Database rules **cascade**: once an ancestor grants `.read` or `.write` at a
+node, every descendant inherits that permission. A stricter owner-check rule
+attached to a descendant (e.g. `$uid === auth.uid`) is made **ineffective** by a
+permissive ancestor (e.g. `auth != null`). The detector reports these cases so
+developers can tighten the ancestor rule or restructure the rules tree.
+
+The analyser recognises these permissive ancestor patterns:
+
+- `true`
+- `auth != null` / `auth !== null`
+- `auth.uid != null` / `auth.uid !== null`
+
+It recognises stricter descendant patterns that include a `$wildcard` segment
+compared against `auth.uid`. Other expression forms are left alone to avoid
+false positives.
+
+Accurate line and column numbers are reported for both the child rule (where the
+annotation lands) and the ancestor (referenced in the finding message).
+
+### Secrets (SEC001–SEC007)
+
+| Rule ID | Severity | Finding |
+| ------- | -------- | ------- |
+| SEC001  | High     | OpenAI API Key |
+| SEC002  | High     | AWS Access Key |
+| SEC003  | High     | AWS Secret Key |
+| SEC004  | High     | GitHub Token |
+| SEC005  | High     | Hardcoded Password |
+| SEC006  | High     | Database URL with credentials |
+| SEC007  | High     | Generic Secret |
+
+### Configuration (CFG001–CFG005)
+
+| Rule ID | Severity | Finding |
+| ------- | -------- | ------- |
+| CFG001  | High     | Exposed ENV Secret |
+| CFG002  | High     | Exposed Database URL |
+| CFG003  | High     | Exposed Password in ENV |
+| CFG004  | High     | Docker Hardcoded Password |
+| CFG005  | High     | Docker Hardcoded Secret |
+
+## Output Formats
+
+### Terminal (default)
+
+```bash
+safecode . --format terminal
+```
+
+Suitable for local development. Shows a banner, per-module sections, and a
+severity summary.
+
+### JSON
 
 ```bash
 safecode . --format json
-safecode . --format sarif --output saferules.sarif
+safecode . --format json --output results.json
 ```
 
-Fail CI only when a finding reaches a chosen threshold:
+Deterministic, versioned JSON. Secret values in descriptions are redacted.
+
+### SARIF (GitHub Code Scanning)
+
+```bash
+safecode . --format sarif --output results.sarif
+```
+
+SARIF 2.1.0 compliant. Upload to GitHub Code Scanning via
+`github/codeql-action/upload-sarif`.
+
+## Severity Thresholds and Exit Codes
 
 ```bash
 safecode . --fail-on high
 ```
 
+| Threshold | Behaviour |
+| --------- | --------- |
+| `none`    | Never fail (default) |
+| `low`     | Fail if any finding is present |
+| `medium`  | Fail on medium, high, or critical |
+| `high`    | Fail on high or critical |
+| `critical`| Fail only on critical |
+
 Exit codes:
 
 | Code | Meaning |
-|---:|---|
-| `0` | Scan completed and no unsuppressed finding met the threshold |
-| `1` | Invalid arguments, target, output, or baseline |
-| `2` | A finding met `--fail-on` |
+| ---- | ------- |
+| 0    | Scan completed; no unsuppressed finding met the threshold |
+| 1    | Invalid arguments, missing target, bad baseline, or output error |
+| 2    | A finding met `--fail-on` |
 
-## Adopt safely with a baseline
+## Baselines
 
-Create a baseline from existing findings:
-
-```bash
-safecode . --format json --generate-baseline .saferules-baseline.json
-```
-
-Commit that file and fail only on new High/Critical findings:
+Suppress known findings so only new issues fail CI.
 
 ```bash
-safecode . \
-  --baseline .saferules-baseline.json \
-  --fail-on high
+# Capture current findings
+safecode . --generate-baseline .saferules-baseline.json
+
+# Scan excluding those findings
+safecode . --baseline .saferules-baseline.json --fail-on high
 ```
 
-Suppress an intentionally accepted rule by stable ID:
+Commit the baseline file. New findings on the same rule/file/location will still
+be reported.
+
+## Ignoring Rules
 
 ```bash
-safecode . --ignore-rule FIRE001
+safecode . --ignore-rule FIRE001 --ignore-rule CFG006
 ```
 
-`--ignore-rule` can be repeated. Prefer a baseline for existing technical debt;
-use rule suppression only when a rule is intentionally irrelevant to the
-project.
+Prefer a baseline for accepted technical debt; use rule suppression only when a
+rule is intentionally irrelevant to the project.
 
-## Real-world validation
-
-SafeCode Auditor was validated against Firebase Realtime Database rules from
-an existing Android application. It detected a real `HIGH`-severity
-unrestricted-read configuration and correctly enforced the configured
-threshold with exit code `2`.
-
-[Read the Firebase Realtime Database validation case study](docs/case-studies/real-world-realtime-database-validation.md)
-
-## GitHub Pull Request integration
-
-The repository includes a composite GitHub Action. A consumer workflow needs
-read access to the repository and `security-events: write` to upload SARIF:
+## GitHub Action
 
 ```yaml
 name: SafeRules PR Guard
@@ -127,44 +222,100 @@ jobs:
           fail-on: high
 ```
 
-Optional Action inputs:
+Action inputs:
 
 | Input | Default | Purpose |
-|---|---|---|
+| ----- | ------- | ------- |
 | `path` | `.` | File or directory to scan |
 | `fail-on` | `high` | `none`, `low`, `medium`, `high`, or `critical` |
 | `baseline` | empty | Path to a committed baseline |
 | `ignore-rules` | empty | Comma-separated stable rule IDs |
 | `upload-sarif` | `true` | Upload annotations to GitHub Code Scanning |
 
-Private repositories must have GitHub Code Security available and enabled for
-SARIF upload. If it is unavailable, set `upload-sarif: "false"`; threshold
-enforcement still works.
-
-A complete workflow template is available at
+A complete workflow template is at
 [`examples/saferules-workflow.yml`](examples/saferules-workflow.yml).
 
-## Firestore analysis architecture
+For private repositories, GitHub Code Security must be available and enabled
+for SARIF upload. Set `upload-sarif: "false"` if unavailable; threshold
+enforcement still works.
 
-```text
-source
-  → offset-preserving comment state machine
-  → nested match/allow parser
-  → condition tokenizer and recursive-descent AST parser
-  → semantic signals
-  → FIRE001–FIRE004 registry
-  → typed Finding with Location, Severity, Confidence, and Fix
-  → terminal / JSON / SARIF reporters
+### Version Pinning
+
+- Use `@v0` for the latest stable release (auto-updating).
+- Pin to a specific tag like `@v0.2.2` for reproducible CI.
+
+## Architecture
+
+```
+Firestore:
+  source
+    → offset-preserving comment state machine
+    → nested match/allow parser
+    → condition tokenizer and recursive-descent AST parser
+    → semantic signals
+    → FIRE001–FIRE004 registry
+    → typed Finding with Location, Severity, Confidence, and Fix
+    → terminal / JSON / SARIF reporters
+
+Realtime Database:
+  source
+    → JSON source-location scanner (line/column tracking)
+    → rules tree builder
+    → dangerous-key detector (CFG006, CFG007)
+    → permission-inheritance analyser (CFG008)
+    → terminal / JSON / SARIF reporters
+
+Secrets & Config:
+  source
+    → regex-based scanners
+    → secret redaction
+    → terminal / JSON / SARIF reporters
 ```
 
-Comment removal preserves every character offset and newline position. This
-allows an `allow` rule to be mapped back to its exact start line and column,
-including inside nested `match` blocks. Strings containing `//`, such as URLs,
-are not treated as comments.
+## Troubleshooting
 
-The original dictionary-style finding access remains compatible with v0.1,
-while the versioned JSON schema exposes stable IDs, confidence, locations, and
-structured fixes.
+### `safecode: command not found`
+
+Ensure the Python scripts directory is on your PATH, or run:
+
+```bash
+python -m safecode_auditor.cli <args>
+```
+
+### No findings on a rules file with known issues
+
+- Verify the file is named `firestore.rules`, `database.rules.json`,
+  `firebase.rules`, or ends in `.rules`.
+- Check that rules are not commented out.
+- Run with `--format json` to see the raw finding list.
+
+### Baseline not suppressing a finding
+
+- The finding's fingerprint may have changed (different file path, operation
+  list, or condition text).
+- Regenerate the baseline with `--generate-baseline`.
+
+### CFG008 not firing on a permissive ancestor
+
+- The ancestor expression must exactly match one of the five recognised patterns
+  (`true`, `auth != null`, `auth !== null`, `auth.uid != null`,
+  `auth.uid !== null`).
+- The child expression must contain a `$wildcard` compared against `auth.uid`.
+
+## Current Limitations
+
+- Custom authorization helper bodies are recognised but not interpreted.
+- Public read access may be intentional for public content; use `--ignore-rule`
+  or a baseline to suppress known-accepted cases.
+- Baselines use content-based fingerprints; reordering rules or changing
+  descriptions may invalidate fingerprints.
+- The Realtime Database analyser uses syntactic pattern matching, not a full
+  expression AST. Compound permissive conditions are conservatively ignored
+  rather than risking false positives.
+- `firebase.json` discovery supports `database.rules` and `firestore.rules`
+  keys. Complex multi-site or multi-project configurations are not detected.
+- The GitHub Action and SARIF document can be validated locally, but Code
+  Scanning annotations require a real workflow run.
 
 ## Development
 
@@ -174,19 +325,13 @@ python -m pytest -q
 python -m compileall -q safecode_auditor scanner main.py
 ```
 
-The test suite covers the expression parser, all four Firestore rules,
-backward-compatible output, nested source locations, comment edge cases,
-deterministic JSON/SARIF, single-file scanning, thresholds, suppression, and
-baseline behavior.
+Lint with Ruff:
 
-## Current boundaries
-
-- Custom authorization helper bodies are recognized but not interpreted.
-- Public read access may be intentional for public content.
-- Baselines suppress exact stable fingerprints; semantic permission diff is a
-  later milestone.
-- The Action and SARIF document can be validated locally, but Code Scanning
-  annotations require a real GitHub workflow run.
+```bash
+python -m pip install ruff==0.6.9
+ruff check .
+ruff format --check .
+```
 
 ## Roadmap
 
@@ -198,8 +343,10 @@ baseline behavior.
 - [x] Severity thresholds, baseline, and rule suppression
 - [x] Composite GitHub Action
 - [x] Accurate source locations for Realtime Database findings
-- [ ] Realtime Database permission inheritance analysis
-- [ ] Realtime Database write validation analysis
+- [x] Realtime Database permission inheritance analysis (CFG008)
+- [x] Bare boolean recognition for RTDB rules
+- [x] Unconditional read detection for bare Firestore rules
+- [ ] Real RTDB expression AST for deeper semantic analysis
 - [ ] Coarse before/after permission diff
 - [ ] Firebase Emulator verification for high-risk findings
 - [ ] Semantic condition implication
