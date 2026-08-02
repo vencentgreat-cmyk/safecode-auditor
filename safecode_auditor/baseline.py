@@ -121,20 +121,16 @@ def load_baseline_matcher(
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     schema = payload.get("schema_version", "1.0.0")
     fingerprints: Sequence[str] = payload.get("fingerprints", [])
-    if not isinstance(fingerprints, list) or not all(
-        isinstance(val, str) for val in fingerprints
-    ):
+    if not isinstance(fingerprints, list) or not all(isinstance(val, str) for val in fingerprints):
         raise ValueError("baseline must contain a fingerprints string array")
     fp_set: set[str] = set(fingerprints)
 
     if schema == "1.0.0":
         # Backward-compatible: check both v1 and v2 fingerprints.
         def _predicate(finding: Any) -> bool:
-            return (
-                fingerprint_v1(finding) in fp_set
-                or fingerprint_v2(finding) in fp_set
-            )
+            return fingerprint_v1(finding) in fp_set or fingerprint_v2(finding) in fp_set
     else:
+
         def _predicate(finding: Any) -> bool:
             return fingerprint_v2(finding) in fp_set
 

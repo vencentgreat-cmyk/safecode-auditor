@@ -133,7 +133,5 @@ class TestBaselineBackwardCompatibility:
 
     def test_multiple_findings_on_same_location_produce_unique(self):
         f1 = _finding(rule_id="FIRE001", path="/x/{y}")
-        f2 = _finding(
-            rule_id="FIRE002", path="/x/{y}", condition="request.auth != null"
-        )
+        f2 = _finding(rule_id="FIRE002", path="/x/{y}", condition="request.auth != null")
         assert fingerprint_v2(f1) != fingerprint_v2(f2)

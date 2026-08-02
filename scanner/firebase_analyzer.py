@@ -883,9 +883,7 @@ def discover_from_firebase_json(project_dir: str) -> list[str]:
         if not isinstance(rules_path, str) or not rules_path.strip():
             continue
         # Resolve relative to the firebase.json directory.
-        candidate = os.path.normpath(
-            os.path.join(project_dir, rules_path)
-        )
+        candidate = os.path.normpath(os.path.join(project_dir, rules_path))
         # Resolve to real path (follows symlinks) and check containment
         # using common-path semantics, which correctly rejects sibling-
         # prefix attacks (e.g. project vs project-escape), .. traversal,

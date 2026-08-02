@@ -216,26 +216,37 @@ def test_sarif_partial_fingerprints_no_collision():
     from safecode_auditor.core.models import Confidence, Finding, Fix, Location, Severity
 
     f1 = Finding(
-        rule_id="FIRE001", rule_name="OpenAccess",
-        title="Open", severity=Severity.CRITICAL, confidence=Confidence.HIGH,
-        description="Open.", explanation="Open.",
+        rule_id="FIRE001",
+        rule_name="OpenAccess",
+        title="Open",
+        severity=Severity.CRITICAL,
+        confidence=Confidence.HIGH,
+        description="Open.",
+        explanation="Open.",
         location=Location(file="firestore.rules", start_line=3, start_column=1),
-        path="/a/{x}", operations=("read",), condition="true",
+        path="/a/{x}",
+        operations=("read",),
+        condition="true",
         fix=Fix(description="Fix."),
     )
     f2 = Finding(
-        rule_id="FIRE001", rule_name="OpenAccess",
-        title="Open", severity=Severity.CRITICAL, confidence=Confidence.HIGH,
-        description="Open.", explanation="Open.",
+        rule_id="FIRE001",
+        rule_name="OpenAccess",
+        title="Open",
+        severity=Severity.CRITICAL,
+        confidence=Confidence.HIGH,
+        description="Open.",
+        explanation="Open.",
         location=Location(file="firestore.rules", start_line=3, start_column=1),
-        path="/b/{y}", operations=("write",), condition="true",
+        path="/b/{y}",
+        operations=("write",),
+        condition="true",
         fix=Fix(description="Fix."),
     )
 
     report = build_sarif_report([f1, f2])
     fps = [
-        r["partialFingerprints"]["primaryLocationLineHash"]
-        for r in report["runs"][0]["results"]
+        r["partialFingerprints"]["primaryLocationLineHash"] for r in report["runs"][0]["results"]
     ]
     assert fps[0] != fps[1], (
         "Partial fingerprints must distinguish findings with different "

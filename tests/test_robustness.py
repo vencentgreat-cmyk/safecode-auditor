@@ -46,9 +46,7 @@ class TestEmptyAndEdgeInputs:
         assert findings == []
 
     def test_only_comments(self):
-        findings = FirebaseRuleAnalyzer().analyze(
-            "// this is a comment\n/* block comment */"
-        )
+        findings = FirebaseRuleAnalyzer().analyze("// this is a comment\n/* block comment */")
         assert findings == []
 
     def test_empty_file_sniffer(self, tmp_path):

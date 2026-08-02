@@ -57,9 +57,7 @@ def _partial_fingerprints(finding: dict[str, Any]) -> dict[str, str]:
     ).encode("utf-8")
     primary_line = hashlib.sha256(encoded).hexdigest()
     return {
-        "primaryLocationLineHash": hashlib.md5(
-            primary_line.encode("utf-8")
-        ).hexdigest(),
+        "primaryLocationLineHash": hashlib.md5(primary_line.encode("utf-8")).hexdigest(),
     }
 
 
@@ -120,9 +118,7 @@ def build_sarif_report(findings: Iterable[Any]) -> dict[str, Any]:
             "locations": [
                 {
                     "physicalLocation": {
-                        "artifactLocation": {
-                            "uri": _artifact_uri(location["file"])
-                        },
+                        "artifactLocation": {"uri": _artifact_uri(location["file"])},
                         "region": region,
                     }
                 }
@@ -144,13 +140,10 @@ def build_sarif_report(findings: Iterable[Any]) -> dict[str, Any]:
                     "driver": {
                         "name": "SafeCode Auditor",
                         "informationUri": (
-                            "https://github.com/vencentgreat-cmyk/"
-                            "safecode-auditor"
+                            "https://github.com/vencentgreat-cmyk/" "safecode-auditor"
                         ),
                         "version": __version__,
-                        "rules": [
-                            definitions[key] for key in sorted(definitions)
-                        ],
+                        "rules": [definitions[key] for key in sorted(definitions)],
                     }
                 },
                 "results": results,

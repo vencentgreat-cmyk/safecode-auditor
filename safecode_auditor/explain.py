@@ -44,11 +44,7 @@ RULES: dict[str, RuleInfo] = {
             "any credentials. This is the most dangerous Firestore "
             "misconfiguration and is a common cause of data breaches."
         ),
-        vulnerable_example=(
-            "match /public/{docId} {\n"
-            "  allow read, write: if true;\n"
-            "}"
-        ),
+        vulnerable_example=("match /public/{docId} {\n" "  allow read, write: if true;\n" "}"),
         safer_example=(
             "match /users/{userId} {\n"
             "  allow read, write: if request.auth != null\n"
@@ -84,9 +80,7 @@ RULES: dict[str, RuleInfo] = {
             "reading user B's data."
         ),
         vulnerable_example=(
-            "match /users/{userId} {\n"
-            "  allow read: if request.auth != null;\n"
-            "}"
+            "match /users/{userId} {\n" "  allow read: if request.auth != null;\n" "}"
         ),
         safer_example=(
             "match /users/{userId} {\n"
@@ -122,9 +116,7 @@ RULES: dict[str, RuleInfo] = {
             "validation, an attacker can corrupt your data model."
         ),
         vulnerable_example=(
-            "match /posts/{postId} {\n"
-            "  allow create: if request.auth != null;\n"
-            "}"
+            "match /posts/{postId} {\n" "  allow create: if request.auth != null;\n" "}"
         ),
         safer_example=(
             "match /posts/{postId} {\n"
@@ -162,14 +154,10 @@ RULES: dict[str, RuleInfo] = {
             "resource owner. Any logged-in user passes this check."
         ),
         vulnerable_example=(
-            "match /users/{userId} {\n"
-            "  allow read: if request.auth.uid != null;\n"
-            "}"
+            "match /users/{userId} {\n" "  allow read: if request.auth.uid != null;\n" "}"
         ),
         safer_example=(
-            "match /users/{userId} {\n"
-            "  allow read: if request.auth.uid == userId;\n"
-            "}"
+            "match /users/{userId} {\n" "  allow read: if request.auth.uid == userId;\n" "}"
         ),
         limitations=(
             "Fires only when an explicit UID-null check exists. If the "
@@ -198,24 +186,18 @@ RULES: dict[str, RuleInfo] = {
             "to every Realtime Database node without authentication. "
             "This exposes all data at this path and below."
         ),
-        vulnerable_example=(
-            '{\n'
-            '  "rules": {\n'
-            '    ".read": "true"\n'
-            '  }\n'
-            '}'
-        ),
+        vulnerable_example=("{\n" '  "rules": {\n' '    ".read": "true"\n' "  }\n" "}"),
         safer_example=(
-            '{\n'
+            "{\n"
             '  "rules": {\n'
             '    ".read": "auth != null",\n'
             '    "users": {\n'
             '      "$uid": {\n'
             '        ".read": "$uid === auth.uid"\n'
-            '      }\n'
-            '    }\n'
-            '  }\n'
-            '}'
+            "      }\n"
+            "    }\n"
+            "  }\n"
+            "}"
         ),
         limitations=(
             "Detects only the exact value 'true' (string or bare "
@@ -243,24 +225,18 @@ RULES: dict[str, RuleInfo] = {
             "write to this database path without authentication. This "
             "can lead to data loss, corruption, or abuse."
         ),
-        vulnerable_example=(
-            '{\n'
-            '  "rules": {\n'
-            '    ".write": true\n'
-            '  }\n'
-            '}'
-        ),
+        vulnerable_example=("{\n" '  "rules": {\n' '    ".write": true\n' "  }\n" "}"),
         safer_example=(
-            '{\n'
+            "{\n"
             '  "rules": {\n'
             '    ".write": "auth != null",\n'
             '    "users": {\n'
             '      "$uid": {\n'
             '        ".write": "$uid === auth.uid"\n'
-            '      }\n'
-            '    }\n'
-            '  }\n'
-            '}'
+            "      }\n"
+            "    }\n"
+            "  }\n"
+            "}"
         ),
         limitations=(
             "Same as CFG006: only exact 'true' values are detected. "
@@ -292,27 +268,27 @@ RULES: dict[str, RuleInfo] = {
             "ignored by Firebase."
         ),
         vulnerable_example=(
-            '{\n'
+            "{\n"
             '  "rules": {\n'
             '    ".read": "auth != null",\n'
             '    "users": {\n'
             '      "$uid": {\n'
             '        ".read": "$uid === auth.uid"\n'
-            '      }\n'
-            '    }\n'
-            '  }\n'
-            '}'
+            "      }\n"
+            "    }\n"
+            "  }\n"
+            "}"
         ),
         safer_example=(
-            '{\n'
+            "{\n"
             '  "rules": {\n'
             '    "users": {\n'
             '      "$uid": {\n'
             '        ".read": "$uid === auth.uid"\n'
-            '      }\n'
-            '    }\n'
-            '  }\n'
-            '}'
+            "      }\n"
+            "    }\n"
+            "  }\n"
+            "}"
         ),
         limitations=(
             "Only recognises five permissive ancestor patterns: 'true', "
